@@ -4542,44 +4542,30 @@ function build3DMap(scene){
   const p=mapPal||{g1:'#5aaa3a',g2:'#4a9a2a'};
   const mapSize=MAP*SCALE;
 
-  // Combo: önce tüm zemin okyanus mavisi, sonra bölgeler üstüne
   const isCombo=curMap==='combo';
-  const baseCol=isCombo?0x1a7ab0:(new THREE.Color(p.g1||'#5aaa3a'));
+
+  // Ana zemin — deniz için mavi (combo) veya yeşil (diğer)
   const groundGeo=new THREE.PlaneGeometry(mapSize,mapSize,1,1);
-  const groundMat=new THREE.MeshLambertMaterial({color:baseCol});
+  const groundMat=new THREE.MeshLambertMaterial({color:isCombo?0x1a7ab0:new THREE.Color(p.g1||'#5aaa3a')});
   const ground=new THREE.Mesh(groundGeo,groundMat);
   ground.rotation.x=-Math.PI/2;
-  ground.position.y=-0.1;
+  ground.position.y=-0.5; // deniz daha alçakta
   ground.receiveShadow=true;
   scene.add(ground);
 
-  // Combo: bölge zeminleri
+  // Combo: bölge zeminleri — denizin üstünde y=0
   if(isCombo&&mapObjects.comboZones){
     const zones=mapObjects.comboZones;
-    const zoneColors={
-      tropical:0x3aaa20, city:0x909090, desert:0xd4a830,
-      ice:0xd0eeff, volcano:0x6a3020
-    };
+    const zoneColors={tropical:0x3aaa20,city:0x808080,desert:0xd4a830,ice:0xd0eeff,volcano:0x6a3020};
     Object.entries(zones).forEach(([name,z])=>{
-      const zw=z.w*SCALE, zh=z.h*SCALE;
-      const geo=new THREE.PlaneGeometry(zw,zh);
+      const geo=new THREE.PlaneGeometry(z.w*SCALE,z.h*SCALE);
       const mat=new THREE.MeshLambertMaterial({color:zoneColors[name]||0x5aaa3a});
       const mesh=new THREE.Mesh(geo,mat);
       mesh.rotation.x=-Math.PI/2;
-      mesh.position.set((z.x+z.w/2-MAP/2)*SCALE, -0.05, (z.y+z.h/2-MAP/2)*SCALE);
+      mesh.position.set((z.x+z.w/2-MAP/2)*SCALE, 0, (z.y+z.h/2-MAP/2)*SCALE);
       mesh.receiveShadow=true;
       scene.add(mesh);
     });
-    // Volkan için koyu lav zemini
-    if(zones.volcano){
-      const vz=zones.volcano;
-      const vGeo=new THREE.PlaneGeometry(vz.w*SCALE*0.5,vz.h*SCALE*0.5);
-      const vMat=new THREE.MeshLambertMaterial({color:0xff3300});
-      const vMesh=new THREE.Mesh(vGeo,vMat);
-      vMesh.rotation.x=-Math.PI/2;
-      vMesh.position.set((vz.x+vz.w/2-MAP/2)*SCALE,-0.03,(vz.y+vz.h/2-MAP/2)*SCALE);
-      scene.add(vMesh);
-    }
   }
 
   // Nehirler / deniz / lav
@@ -4931,9 +4917,9 @@ function render3D(){
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
     if(camMode==='iso'){
-      // Zooba izometrik — karakterin üstünden çapraz
-      three.cam.position.set(p.x, 14, p.z+12);
-      three.cam.lookAt(p.x, 0, p.z-3);
+      // Zooba izometrik — karaktere yakın, hafif yukarıdan
+      three.cam.position.set(p.x, 6, p.z+8);
+      three.cam.lookAt(p.x, 1, p.z-1);
     } else if(camMode==='top'){
       // Tam üstten
       three.cam.position.set(p.x, 30, p.z+0.1);
