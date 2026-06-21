@@ -224,6 +224,10 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
     <div id="supCd"></div>
     <div id="joy"><div id="jB"><div id="jK"></div></div></div>
     <button id="captureBtn" onclick="doCapture()" style="display:none;position:absolute;bottom:310px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #ffcc00;background:radial-gradient(circle at 40% 35%,rgba(255,200,0,0.8),rgba(180,80,0,0.9));color:#fff;font-size:10px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 24px rgba(255,200,0,0.7),0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;">🤝<br>YAKALA!</button>
+    <button id="enterCarBtn" onclick="enterCar()" style="display:none;position:absolute;bottom:400px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #00e0ff;background:radial-gradient(circle at 40% 35%,rgba(0,180,255,0.8),rgba(0,60,160,0.9));color:#fff;font-size:10px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 20px rgba(0,200,255,0.6);letter-spacing:1px;">🚗<br>BİN!</button>
+    <button id="exitCarBtn" onclick="exitCar()" style="display:none;position:absolute;bottom:400px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #ff6020;background:radial-gradient(circle at 40% 35%,rgba(255,120,0,0.8),rgba(160,40,0,0.9));color:#fff;font-size:10px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 20px rgba(255,100,0,0.6);letter-spacing:1px;">🚗<br>İN!</button>
+    <button id="enterBuildBtn" onclick="enterBuilding()" style="display:none;position:absolute;bottom:490px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #a0ff60;background:radial-gradient(circle at 40% 35%,rgba(80,200,40,0.8),rgba(20,80,0,0.9));color:#fff;font-size:10px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 20px rgba(80,220,40,0.6);letter-spacing:1px;">🏠<br>GİR!</button>
+    <button id="exitBuildBtn" onclick="exitBuilding()" style="display:none;position:absolute;bottom:490px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #ff4060;background:radial-gradient(circle at 40% 35%,rgba(220,40,60,0.8),rgba(100,0,20,0.9));color:#fff;font-size:10px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 20px rgba(220,40,60,0.6);letter-spacing:1px;">🚪<br>ÇIK!</button>
     <button id="dalBtn" onclick="doDive()" style="display:none;position:absolute;bottom:210px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #00e5ff;background:radial-gradient(circle at 40% 35%,rgba(0,180,255,0.7),rgba(0,60,140,0.85));color:#fff;font-size:11px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 24px rgba(0,220,255,0.7),0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;">🤿<br>DAL</button>
     <div id="aBtns">
       <button class="ab" id="atkBtn" onclick="doAtk()">⚔️<br>SALDIR</button>
@@ -292,6 +296,10 @@ let parachute={active:false, x:0, y:0, targetX:0, targetY:0, alt:1}; // paraşü
 let wildAnimals=[];
 let captureBtn=null;
 let inWater=false;
+// ── ARABAlar ──────────────────────────────────────────────
+let playerCar=null; // oyuncu arabasındaysa bu araba objesi
+let inBuilding=null; // oyuncu binadaysa bu bina objesi
+let buildingEnterBtn=null;
 let isSubmerged=false;
 let underwaterFish=[];
 let inCave=false;
@@ -1503,169 +1511,193 @@ function genMap(mt){
 
   // ── COMBO HARİTASI ──────────────────────────────────────
   if(mt==='combo'){
-    const M=MAP;
-    // Harita 5 bölgeye ayrılır (her biri ~8000x3200):
-    // [Tropikal Ada - sol üst] [Şehir - sağ üst]
-    // [Volkan - orta]
-    // [Çöl - sol alt]          [Kar/Buz - sağ alt]
-    // Ortada büyük deniz/göl — yüzerek geçilir
+    // COMBO haritası: her bölge ~8000x8000, aralarında ~2000px deniz
+    // Toplam harita: MAP x MAP (8000x8000) ama bölgeler sıkışık değil
+    // Düzen: 3 sütun x 2 satır, ortada deniz boşluğu
+    // [Tropikal(sol üst)] [DENIZ] [Şehir(sağ üst)]
+    // [DENIZ]             [DENIZ] [DENIZ]
+    // [Çöl(sol alt)]      [DENIZ] [Kar/Buz(sağ alt)]
+    // Volkan: ortada küçük bir adacık (yüzerek ulaşılır)
+
+    const M=MAP; // 8000
+    const SEA=M*0.08; // bölgeler arası deniz boşluğu ~640px
+    const ZW=M*0.38; // her bölge genişliği ~3040px
+    const ZH=M*0.38; // her bölge yüksekliği ~3040px
+
     o.comboZones={
-      tropical:{x:M*0.12,y:M*0.12,w:M*0.3,h:M*0.3},
-      city:    {x:M*0.58,y:M*0.08,w:M*0.35,h:M*0.32},
-      volcano: {x:M*0.35,y:M*0.35,w:M*0.3,h:M*0.3},
-      desert:  {x:M*0.05,y:M*0.6,w:M*0.35,h:M*0.35},
-      ice:     {x:M*0.6,y:M*0.58,w:M*0.35,h:M*0.38},
+      tropical:{x:M*0.02, y:M*0.02, w:ZW, h:ZH},
+      city:    {x:M*0.60, y:M*0.02, w:ZW, h:ZH},
+      desert:  {x:M*0.02, y:M*0.60, w:ZW, h:ZH},
+      ice:     {x:M*0.60, y:M*0.60, w:ZW, h:ZH},
+      volcano: {x:M*0.36, y:M*0.36, w:M*0.28, h:M*0.28},
     };
 
-    // ── ORTADA DENİZ (yüzerek geçilir) ──
-    // Bölgeler arasındaki boşluklar nehir/deniz olacak
-    // Ana deniz — haritanın ortası
-    const seaPts=[];
-    seaPts.push({x:M*0.28,y:M*0.28});seaPts.push({x:M*0.5,y:M*0.22});
-    seaPts.push({x:M*0.72,y:M*0.30});seaPts.push({x:M*0.78,y:M*0.5});
-    seaPts.push({x:M*0.7,y:M*0.68});seaPts.push({x:M*0.5,y:M*0.72});
-    seaPts.push({x:M*0.28,y:M*0.65});seaPts.push({x:M*0.22,y:M*0.5});
-    seaPts.push({x:M*0.28,y:M*0.28});
-    o.sea={pts:seaPts,isOcean:true};
-    o.rivers.push({pts:[{x:M*0.28,y:M*0.38},{x:M*0.22,y:M*0.5},{x:M*0.28,y:M*0.62}],w:180,isSea:true});
-    o.rivers.push({pts:[{x:M*0.72,y:M*0.32},{x:M*0.78,y:M*0.5},{x:M*0.72,y:M*0.66}],w:180,isSea:true});
-    o.rivers.push({pts:[{x:M*0.3,y:M*0.28},{x:M*0.5,y:M*0.22},{x:M*0.7,y:M*0.3}],w:180,isSea:true});
-    o.rivers.push({pts:[{x:M*0.3,y:M*0.65},{x:M*0.5,y:M*0.7},{x:M*0.7,y:M*0.65}],w:180,isSea:true});
+    // ── DENIZ (bölgeler arası, yüzerek geçilir) ──
+    // Yatay deniz şeritleri
+    o.rivers.push({pts:[{x:0,y:ZH+M*0.02+SEA*0.3},{x:M,y:ZH+M*0.02+SEA*0.3}],w:SEA*4,isSea:true});
+    // Dikey deniz şeritleri
+    o.rivers.push({pts:[{x:ZW+M*0.02+SEA*0.3,y:0},{x:ZW+M*0.02+SEA*0.3,y:M}],w:SEA*4,isSea:true});
 
-    // Uzaktaki ada — denizin ortasında (yüzerek ulaşılır)
-    o.islands=[
-      {x:M*0.5,y:M*0.47,r:220,isComboIsland:true},
-      {x:M*0.42,y:M*0.53,r:100,isComboIsland:true},
-      {x:M*0.58,y:M*0.43,r:90,isComboIsland:true},
-    ];
+    // Volkan adası — denizin ortasında
+    o.sea={x:M*0.5,y:M*0.5,r:M*0.14,isOcean:true};
 
-    // ── TROPİKAL ADA BÖLGESİ (sol üst) ──
+    // ── TROPİKAL ADA BÖLGESİ ──
     const tz=o.comboZones.tropical;
-    // Palmiye ağaçları
-    for(let i=0;i<120;i++) o.trees.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,r:28+R()*20,isPalm:true,zone:'tropical'});
-    // Plaj (sahil taşları)
-    for(let i=0;i<80;i++) o.rocks.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,w:15+R()*30,h:10+R()*20,a:R()*Math.PI,isBeach:true});
-    // Küçük tropik havuzlar
-    for(let i=0;i<4;i++) o.rivers.push({pts:[{x:tz.x+R()*tz.w,y:tz.y+R()*tz.h},{x:tz.x+R()*tz.w,y:tz.y+R()*tz.h}],w:80+R()*60,isTropPool:true});
-    // Kulübe (girilebilir)
+    for(let i=0;i<180;i++) o.trees.push({x:tz.x+20+R()*(tz.w-40),y:tz.y+20+R()*(tz.h-40),r:24+R()*22,isPalm:true,zone:'tropical'});
+    for(let i=0;i<60;i++) o.trees.push({x:tz.x+20+R()*(tz.w-40),y:tz.y+20+R()*(tz.h-40),r:18+R()*14,zone:'tropical'});
+    for(let i=0;i<100;i++) o.rocks.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,w:12+R()*28,h:8+R()*18,a:R()*Math.PI,isBeach:true});
+    for(let i=0;i<80;i++) o.bushes.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,r:12+R()*18});
+    // Şelale nehirleri
+    for(let i=0;i<5;i++) o.rivers.push({pts:[{x:tz.x+R()*tz.w,y:tz.y+R()*tz.h*0.5},{x:tz.x+R()*tz.w,y:tz.y+tz.h*0.5+R()*tz.h*0.5}],w:30+R()*20,isTropPool:true});
+    // Tropik havuzlar
+    for(let i=0;i<6;i++) o.rivers.push({pts:[{x:tz.x+100+R()*(tz.w-200),y:tz.y+100+R()*(tz.h-200)},{x:tz.x+100+R()*(tz.w-200),y:tz.y+100+R()*(tz.h-200)}],w:90+R()*70,isTropPool:true});
+    // Kulübeler (girilebilir, içinde sandık)
     o.buildings=o.buildings||[];
-    for(let i=0;i<5;i++) o.buildings.push({x:tz.x+60+R()*(tz.w-120),y:tz.y+60+R()*(tz.h-120),w:140,h:110,type:'hut',label:'Kulübe',zone:'tropical',color:'#8B5E2A',roof:'#c8a050'});
-    // Vahşi hayvanlar
-    o.wildAnimals=o.wildAnimals||[];
-    for(let i=0;i<8;i++) o.wildAnimals.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,type:['parrot','monkey','turtle'][i%3],zone:'tropical',hp:40,alive:true,companion:null,phase:R()*Math.PI*2});
-    // Mağaralar
-    for(let i=0;i<3;i++) o.caves.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,r:150+R()*80});
+    for(let i=0;i<8;i++) o.buildings.push({
+      x:tz.x+80+R()*(tz.w-160),y:tz.y+80+R()*(tz.h-160),
+      w:160,h:130,type:'hut',label:'Kulübe',zone:'tropical',
+      color:'#8B5E2A',roof:'#c8a050',
+      loot:[{type:'health',heal:40},{type:'weapon'}][i%2?0:1]
+    });
+    // Tropik vahşi hayvanlar
+    o.wildAnimals=[];
+    const tropAnimals=['parrot','monkey','turtle','boar'];
+    for(let i=0;i<14;i++) o.wildAnimals.push({x:tz.x+50+R()*(tz.w-100),y:tz.y+50+R()*(tz.h-100),type:tropAnimals[i%4],zone:'tropical',hp:40,maxHp:40,alive:true,captured:false,phase:R()*Math.PI*2,vx:0,vy:0});
+    // Tropik mağaralar
+    for(let i=0;i<4;i++) o.caves.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,r:150+R()*80});
+    // Kütükler
+    for(let i=0;i<60;i++) o.logs.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,w:40+R()*60,a:R()*Math.PI});
 
-    // ── ŞEHİR BÖLGESİ (sağ üst) ──
+    // ── ŞEHİR BÖLGESİ ──
     const cz=o.comboZones.city;
-    // Yollar (grid)
-    const roadY1=cz.y+cz.h*0.33, roadY2=cz.y+cz.h*0.66;
-    const roadX1=cz.x+cz.w*0.33, roadX2=cz.x+cz.w*0.66;
-    o.paths.push({pts:[{x:cz.x,y:roadY1},{x:cz.x+cz.w,y:roadY1}],isRoad:true,roadW:55});
-    o.paths.push({pts:[{x:cz.x,y:roadY2},{x:cz.x+cz.w,y:roadY2}],isRoad:true,roadW:55});
-    o.paths.push({pts:[{x:roadX1,y:cz.y},{x:roadX1,y:cz.y+cz.h}],isRoad:true,roadW:55});
-    o.paths.push({pts:[{x:roadX2,y:cz.y},{x:roadX2,y:cz.y+cz.h}],isRoad:true,roadW:55});
-    // Binalar (girilebilir)
-    const cityBlocks=[
-      {x:cz.x+40,y:cz.y+40,w:200,h:160,type:'building',label:'Bina',color:'#8090a0',roof:'#607080'},
-      {x:cz.x+280,y:cz.y+40,w:160,h:200,type:'building',label:'Kule',color:'#909aaa',roof:'#506070'},
-      {x:cz.x+480,y:cz.y+50,w:180,h:150,type:'building',label:'Dükkan',color:'#a09080',roof:'#706050'},
-      {x:cz.x+40,y:cz.y+260,w:220,h:170,type:'building',label:'Market',color:'#a0a090',roof:'#707060'},
-      {x:cz.x+300,y:cz.y+280,w:160,h:140,type:'building',label:'Garaj',color:'#8a8a80',roof:'#606060'},
-      {x:cz.x+500,y:cz.y+260,w:190,h:160,type:'building',label:'Otel',color:'#b0a090',roof:'#806040'},
-      {x:cz.x+60,y:cz.y+480,w:170,h:150,type:'building',label:'Okul',color:'#b0c0a0',roof:'#708060'},
-      {x:cz.x+280,y:cz.y+480,w:200,h:160,type:'building',label:'Hastane',color:'#d0d0d0',roof:'#c03030'},
-      {x:cz.x+510,y:cz.y+490,w:160,h:140,type:'building',label:'Karakol',color:'#90a070',roof:'#506030'},
+    // Yol griidi — her iki yönde
+    const cRY=[cz.y+cz.h*0.2,cz.y+cz.h*0.4,cz.y+cz.h*0.6,cz.y+cz.h*0.8];
+    const cRX=[cz.x+cz.w*0.2,cz.x+cz.w*0.4,cz.x+cz.w*0.6,cz.x+cz.w*0.8];
+    cRY.forEach(ry=>o.paths.push({pts:[{x:cz.x,y:ry},{x:cz.x+cz.w,y:ry}],isRoad:true,roadW:60}));
+    cRX.forEach(rx=>o.paths.push({pts:[{x:rx,y:cz.y},{x:rx,y:cz.y+cz.h}],isRoad:true,roadW:60}));
+    // Şehir binaları (girilebilir)
+    const cityBldgs=[
+      {dx:0.05,dy:0.05,w:200,h:180,type:'building',label:'Bina A',color:'#8090a0',roof:'#607080'},
+      {dx:0.25,dy:0.05,w:170,h:200,type:'building',label:'Kule',color:'#909aaa',roof:'#506070'},
+      {dx:0.45,dy:0.05,w:190,h:160,type:'building',label:'Dükkan',color:'#a09080',roof:'#706050'},
+      {dx:0.65,dy:0.05,w:210,h:180,type:'building',label:'Otel',color:'#b0a090',roof:'#806040'},
+      {dx:0.05,dy:0.28,w:220,h:190,type:'building',label:'Market',color:'#a0a090',roof:'#707060'},
+      {dx:0.28,dy:0.28,w:180,h:170,type:'building',label:'Garaj',color:'#8a8a80',roof:'#606060'},
+      {dx:0.50,dy:0.28,w:200,h:180,type:'building',label:'Fabrika',color:'#909090',roof:'#505050'},
+      {dx:0.70,dy:0.28,w:170,h:160,type:'building',label:'Depo',color:'#807870',roof:'#584840'},
+      {dx:0.05,dy:0.52,w:200,h:180,type:'building',label:'Okul',color:'#b0c0a0',roof:'#708060'},
+      {dx:0.28,dy:0.52,w:210,h:190,type:'building',label:'Hastane',color:'#d0d0d0',roof:'#c03030'},
+      {dx:0.52,dy:0.52,w:180,h:160,type:'building',label:'Karakol',color:'#90a070',roof:'#506030'},
+      {dx:0.72,dy:0.52,w:190,h:170,type:'building',label:'Banka',color:'#c0c0b0',roof:'#808060'},
+      {dx:0.05,dy:0.76,w:200,h:160,type:'building',label:'Cafe',color:'#c0a080',roof:'#906040'},
+      {dx:0.30,dy:0.76,w:180,h:170,type:'building',label:'İtfaiye',color:'#e05030',roof:'#b02010'},
+      {dx:0.54,dy:0.76,w:200,h:160,type:'building',label:'AVM',color:'#c0b0a0',roof:'#907050'},
+      {dx:0.74,dy:0.76,w:180,h:170,type:'building',label:'Spor Salonu',color:'#a0b0c0',roof:'#607080'},
     ];
-    cityBlocks.forEach(b=>o.buildings.push({...b,zone:'city'}));
-    // Arabalar
+    cityBldgs.forEach(b=>o.buildings.push({
+      x:cz.x+cz.w*b.dx,y:cz.y+cz.h*b.dy,
+      w:b.w,h:b.h,type:b.type,label:b.label,zone:'city',
+      color:b.color,roof:b.roof,loot:{type:'weapon'}
+    }));
+    // Arabalar — yollarda park edilmiş
     o.cars=o.cars||[];
-    const carColors=['#e03030','#3060e0','#e0c030','#30c060','#e06020','#8030e0'];
-    for(let i=0;i<18;i++){
-      const onRoadH=R()<0.5;
-      const roadY=onRoadH?(R()<0.5?roadY1:roadY2):(R()<0.5?roadX1:roadX2);
+    const carCols=['#e03030','#3060e0','#e0c030','#30c060','#e06020','#8030e0','#30c0c0','#e03080','#ffffff','#111111'];
+    for(let i=0;i<30;i++){
+      const isH=R()<0.5;
+      const ry=isH?cRY[i%cRY.length]:cRX[i%cRX.length];
       o.cars.push({
-        x:onRoadH?cz.x+R()*cz.w:roadY,
-        y:onRoadH?roadY:cz.y+R()*cz.h,
-        angle:onRoadH?0:Math.PI/2,
-        color:carColors[i%carColors.length],
-        speed:0,maxSpeed:5,
-        isParked:true,driver:null,zone:'city'
+        x:isH?cz.x+R()*cz.w:ry,
+        y:isH?ry:cz.y+R()*cz.h,
+        angle:isH?0:Math.PI/2,
+        color:carCols[i%carCols.length],
+        speed:0,maxSpeed:7,acc:0.3,friction:0.88,
+        w:60,h:36,isParked:true,driver:null,zone:'city',hp:80,maxHp:80
       });
     }
-    // Şehir ağaçları (kaldırım)
-    for(let i=0;i<40;i++) o.trees.push({x:cz.x+R()*cz.w,y:cz.y+R()*cz.h,r:16+R()*10,isCity:true,zone:'city'});
-    // Vahşi hayvanlar (şehirde kaçak)
-    for(let i=0;i<4;i++) o.wildAnimals.push({x:cz.x+R()*cz.w,y:cz.y+R()*cz.h,type:'dog',zone:'city',hp:35,alive:true,companion:null,phase:R()*Math.PI*2});
+    // Kaldırım ağaçları
+    for(let i=0;i<60;i++) o.trees.push({x:cz.x+R()*cz.w,y:cz.y+R()*cz.h,r:14+R()*10,isCity:true,zone:'city'});
+    // Şehir vahşi hayvanları (kaçak)
+    for(let i=0;i<8;i++) o.wildAnimals.push({x:cz.x+50+R()*(cz.w-100),y:cz.y+50+R()*(cz.h-100),type:['dog','cat','crow'][i%3],zone:'city',hp:30,maxHp:30,alive:true,captured:false,phase:R()*Math.PI*2,vx:0,vy:0});
+    for(let i=0;i<30;i++) o.bushes.push({x:cz.x+R()*cz.w,y:cz.y+R()*cz.h,r:8+R()*12});
 
-    // ── VOLKAN BÖLGESİ (orta) ──
+    // ── VOLKAN BÖLGESİ (ortada ada) ──
     const vz=o.comboZones.volcano;
-    // Volkan dağı merkezi
-    o.volcano={x:vz.x+vz.w*0.5,y:vz.y+vz.h*0.45,r:280,active:true};
-    // Lav nehirleri
+    o.volcano={x:vz.x+vz.w*0.5,y:vz.y+vz.h*0.45,r:300,active:true};
     const lavaCx=vz.x+vz.w*0.5,lavaCy=vz.y+vz.h*0.45;
-    [[0.2,0.8],[0.8,0.7],[0.5,0.95],[0.1,0.6],[0.9,0.4]].forEach(([dx,dy])=>{
-      o.rivers.push({pts:[{x:lavaCx,y:lavaCy},{x:vz.x+vz.w*dx,y:vz.y+vz.h*dy}],w:40+R()*30,isLava:true});
+    [[0.15,0.9],[0.85,0.8],[0.5,0.98],[0.05,0.55],[0.95,0.45],[0.3,0.05],[0.7,0.1]].forEach(([dx,dy])=>{
+      o.rivers.push({pts:[{x:lavaCx,y:lavaCy},{x:vz.x+vz.w*dx,y:vz.y+vz.h*dy}],w:35+R()*30,isLava:true});
     });
-    // Yanmış ağaçlar
-    for(let i=0;i<60;i++) o.trees.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,r:14+R()*12,isBurnt:true,zone:'volcano'});
-    // Volkanik taşlar
-    for(let i=0;i<120;i++) o.rocks.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,w:20+R()*50,h:14+R()*36,a:R()*Math.PI,isVolcanic:true});
-    // Mağaralar (volkanik)
-    for(let i=0;i<4;i++) o.caves.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,r:160+R()*80,isVolcanic:true});
-    // Vahşi hayvanlar (ateş yaratıkları)
-    for(let i=0;i<5;i++) o.wildAnimals.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,type:'firebird',zone:'volcano',hp:60,alive:true,companion:null,phase:R()*Math.PI*2});
+    for(let i=0;i<80;i++) o.trees.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,r:12+R()*14,isBurnt:true,zone:'volcano'});
+    for(let i=0;i<150;i++) o.rocks.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,w:18+R()*55,h:12+R()*38,a:R()*Math.PI,isVolcanic:true});
+    for(let i=0;i<5;i++) o.caves.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,r:160+R()*80,isVolcanic:true});
+    for(let i=0;i<8;i++) o.wildAnimals.push({x:vz.x+50+R()*(vz.w-100),y:vz.y+50+R()*(vz.h-100),type:['firebird','lavacroc','serpent'][i%3],zone:'volcano',hp:70,maxHp:70,alive:true,captured:false,phase:R()*Math.PI*2,vx:0,vy:0});
+    // Volkan içindeki bina (tapınak)
+    o.buildings.push({x:lavaCx-100,y:lavaCy+320,w:200,h:160,type:'temple',label:'Tapınak',zone:'volcano',color:'#504030',roof:'#806050',loot:{type:'weapon'}});
 
-    // ── ÇÖL BÖLGESİ (sol alt) ──
+    // ── ÇÖL BÖLGESİ ──
     const dz=o.comboZones.desert;
-    // Kaktüsler
-    for(let i=0;i<100;i++) o.trees.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,r:16+R()*14,isCactus:true,zone:'desert'});
-    // Kum tepeleri (büyük taşlar gibi)
-    for(let i=0;i<60;i++) o.rocks.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,w:60+R()*120,h:20+R()*40,a:R()*0.3,isSandDune:true});
-    // Piramitler
+    for(let i=0;i<150;i++) o.trees.push({x:dz.x+20+R()*(dz.w-40),y:dz.y+20+R()*(dz.h-40),r:14+R()*16,isCactus:true,zone:'desert'});
+    for(let i=0;i<80;i++) o.rocks.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,w:55+R()*130,h:18+R()*45,a:R()*0.4,isSandDune:true});
+    for(let i=0;i<40;i++) o.rocks.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,w:20+R()*50,h:15+R()*35,a:R()*Math.PI,isVolcanic:true});
+    // Piramitler (büyük, girilebilir)
     o.pyramids=[
-      {x:dz.x+dz.w*0.25,y:dz.y+dz.h*0.35,r:200},
-      {x:dz.x+dz.w*0.65,y:dz.y+dz.h*0.25,r:140},
-      {x:dz.x+dz.w*0.5,y:dz.y+dz.h*0.72,r:110},
+      {x:dz.x+dz.w*0.22,y:dz.y+dz.h*0.3,r:250},
+      {x:dz.x+dz.w*0.68,y:dz.y+dz.h*0.22,r:180},
+      {x:dz.x+dz.w*0.5,y:dz.y+dz.h*0.75,r:140},
     ];
-    // Vaha (küçük su havuzları)
-    for(let i=0;i<4;i++) o.rivers.push({pts:[{x:dz.x+80+R()*(dz.w-160),y:dz.y+80+R()*(dz.h-160)},{x:dz.x+80+R()*(dz.w-160),y:dz.y+80+R()*(dz.h-160)}],w:70+R()*50,isOasis:true});
+    o.pyramids.forEach(p=>o.buildings.push({x:p.x-60,y:p.y+p.r*0.7,w:120,h:90,type:'pyramid_entrance',label:'Piramit Girişi',zone:'desert',color:'#c8a040',roof:'#e0b850',loot:{type:'health',heal:60}}));
+    // Vahalar
+    for(let i=0;i<8;i++) o.rivers.push({pts:[{x:dz.x+120+R()*(dz.w-240),y:dz.y+120+R()*(dz.h-240)},{x:dz.x+120+R()*(dz.w-240),y:dz.y+120+R()*(dz.h-240)}],w:80+R()*60,isOasis:true});
+    for(let i=0;i<60;i++) o.bushes.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,r:6+R()*10});
     // Çöl hayvanları
-    for(let i=0;i<7;i++) o.wildAnimals.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,type:['camel','scorpion','snake'][i%3],zone:'desert',hp:45,alive:true,companion:null,phase:R()*Math.PI*2});
-    // Çöl binası (piramit girişi / çadır)
-    for(let i=0;i<3;i++) o.buildings.push({x:dz.x+80+R()*(dz.w-160),y:dz.y+80+R()*(dz.h-160),w:120,h:100,type:'tent',label:'Çadır',zone:'desert',color:'#c8a060',roof:'#e0b870'});
-    // Mağara (piramit içi)
-    for(let i=0;i<3;i++) o.caves.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,r:130+R()*70});
+    const desertAnimals=['camel','scorpion','snake','vulture'];
+    for(let i=0;i<14;i++) o.wildAnimals.push({x:dz.x+50+R()*(dz.w-100),y:dz.y+50+R()*(dz.h-100),type:desertAnimals[i%4],zone:'desert',hp:45,maxHp:45,alive:true,captured:false,phase:R()*Math.PI*2,vx:0,vy:0});
+    // Çadırlar
+    for(let i=0;i<5;i++) o.buildings.push({x:dz.x+100+R()*(dz.w-200),y:dz.y+100+R()*(dz.h-200),w:130,h:100,type:'tent',label:'Çadır',zone:'desert',color:'#c8a060',roof:'#e0b870',loot:{type:'health',heal:30}});
+    for(let i=0;i<4;i++) o.caves.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,r:130+R()*70});
+    for(let i=0;i<40;i++) o.logs.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,w:30+R()*50,a:R()*Math.PI});
 
-    // ── KAR/BUZ BÖLGESİ (sağ alt) ──
+    // ── KAR/BUZ BÖLGESİ ──
     const iz=o.comboZones.ice;
-    // Kar ağaçları (çam)
-    for(let i=0;i<90;i++) o.trees.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,r:20+R()*16,isSnow:true,zone:'ice'});
-    // Buz taşları
-    for(let i=0;i<80;i++) o.rocks.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,w:18+R()*40,h:12+R()*28,a:R()*Math.PI,isIce:true});
-    // Donmuş göl
-    o.rivers.push({pts:[{x:iz.x+iz.w*0.3,y:iz.y+iz.h*0.4},{x:iz.x+iz.w*0.7,y:iz.y+iz.h*0.4},{x:iz.x+iz.w*0.7,y:iz.y+iz.h*0.7},{x:iz.x+iz.w*0.3,y:iz.y+iz.h*0.7}],w:120,isFrozen:true});
+    for(let i=0;i<140;i++) o.trees.push({x:iz.x+20+R()*(iz.w-40),y:iz.y+20+R()*(iz.h-40),r:18+R()*18,isSnow:true,zone:'ice'});
+    for(let i=0;i<100;i++) o.rocks.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,w:16+R()*42,h:10+R()*28,a:R()*Math.PI,isIce:true});
+    // Donmuş göl (büyük)
+    o.rivers.push({pts:[{x:iz.x+iz.w*0.25,y:iz.y+iz.h*0.35},{x:iz.x+iz.w*0.75,y:iz.y+iz.h*0.35},{x:iz.x+iz.w*0.75,y:iz.y+iz.h*0.65},{x:iz.x+iz.w*0.25,y:iz.y+iz.h*0.65},{x:iz.x+iz.w*0.25,y:iz.y+iz.h*0.35}],w:130,isFrozen:true});
+    // Kar nehirleri
+    for(let i=0;i<3;i++) o.rivers.push({pts:[{x:iz.x+R()*iz.w,y:iz.y+R()*iz.h*0.5},{x:iz.x+R()*iz.w,y:iz.y+iz.h*0.5+R()*iz.h*0.5}],w:25+R()*20,isFrozen:true});
     // Igloo'lar (girilebilir)
-    for(let i=0;i<6;i++) o.buildings.push({x:iz.x+80+R()*(iz.w-160),y:iz.y+80+R()*(iz.h-160),w:120,h:100,type:'igloo',label:'Igloo',zone:'ice',color:'#d0e8f0',roof:'#e8f4ff'});
+    for(let i=0;i<10;i++) o.buildings.push({x:iz.x+80+R()*(iz.w-160),y:iz.y+80+R()*(iz.h-160),w:120,h:100,type:'igloo',label:'Igloo',zone:'ice',color:'#d0e8f0',roof:'#e8f4ff',loot:{type:'health',heal:35}});
+    // Buz mağaraları
+    for(let i=0;i<5;i++) o.caves.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,r:140+R()*80,isIceCave:true});
     // Buz hayvanları
-    for(let i=0;i<7;i++) o.wildAnimals.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,type:['penguin','polarbear','seal'][i%3],zone:'ice',hp:50,alive:true,companion:null,phase:R()*Math.PI*2});
-    // Kar mağaraları
-    for(let i=0;i<3;i++) o.caves.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,r:140+R()*80,isIceCave:true});
+    const iceAnimals=['penguin','polarbear','seal','yeti'];
+    for(let i=0;i<14;i++) o.wildAnimals.push({x:iz.x+50+R()*(iz.w-100),y:iz.y+50+R()*(iz.h-100),type:iceAnimals[i%4],zone:'ice',hp:55,maxHp:55,alive:true,captured:false,phase:R()*Math.PI*2,vx:0,vy:0});
+    for(let i=0;i<50;i++) o.bushes.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,r:8+R()*12});
+    for(let i=0;i<30;i++) o.logs.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,w:35+R()*55,a:R()*Math.PI});
 
-    // ── ORTAK COMBO NESNELER ──
-    // Bölgeler arası yollar
-    o.paths.push({pts:[{x:M*0.27,y:M*0.27},{x:M*0.35,y:M*0.35}],isRoad:true,roadW:40}); // tropikal→volkan
-    o.paths.push({pts:[{x:M*0.65,y:M*0.28},{x:M*0.58,y:M*0.38}],isRoad:true,roadW:40}); // şehir→volkan
-    o.paths.push({pts:[{x:M*0.38,y:M*0.65},{x:M*0.28,y:M*0.65}],isRoad:true,roadW:40}); // volkan→çöl
-    o.paths.push({pts:[{x:M*0.62,y:M*0.65},{x:M*0.72,y:M*0.65}],isRoad:true,roadW:40}); // volkan→buz
-    // Köprüler (adaya)
-    o.bridges=[
-      {x:M*0.38,y:M*0.47,a:0,w:120},
-      {x:M*0.5,y:M*0.38,a:Math.PI/2,w:100},
+    // ── GENİŞ DENİZ (ortada, yüzerek geçilir) ──
+    // Deniz bölgesi = bölgeler dışındaki her yer isSea
+    // Merkezdeki ada (volkan)
+    o.islands=[
+      {x:vz.x+vz.w*0.5, y:vz.y+vz.h*0.5, r:vz.w*0.55, isVolcanoIsland:true},
+      {x:M*0.5,y:M*0.5,r:80,isComboIsland:true}, // küçük kayalık
     ];
-    // Genel kütükler ve çalılar
-    for(let i=0;i<200;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:50+R()*70,a:R()*Math.PI});
-    for(let i=0;i<300;i++) o.bushes.push({x:R()*MAP,y:R()*MAP,r:10+R()*16});
+
+    // ── GEÇITLER (bölgeler arası köprüler) ──
+    o.bridges=[
+      // Tropikal → Volkan adası
+      {x1:tz.x+tz.w, y1:tz.y+tz.h*0.5, x2:vz.x, y2:vz.y+vz.h*0.4, w:50},
+      // Şehir → Volkan adası
+      {x1:cz.x, y1:cz.y+cz.h*0.5, x2:vz.x+vz.w, y2:vz.y+vz.h*0.4, w:50},
+      // Çöl → Volkan adası
+      {x1:dz.x+dz.w*0.5, y1:dz.y, x2:vz.x+vz.w*0.3, y2:vz.y+vz.h, w:50},
+      // Buz → Volkan adası
+      {x1:iz.x+iz.w*0.3, y1:iz.y, x2:vz.x+vz.w*0.7, y2:vz.y+vz.h, w:50},
+    ];
+
+    // Genel kütükler ve çalılar (tüm haritaya dağılmış)
+    for(let i=0;i<100;i++) o.logs.push({x:R()*M,y:R()*M,w:40+R()*60,a:R()*Math.PI});
+    for(let i=0;i<150;i++) o.bushes.push({x:R()*M,y:R()*M,r:8+R()*14});
   }
 
   // eşyalar
@@ -1749,6 +1781,72 @@ function update(dt){
       addKF('İniş yaptın! ✅');
     }
     return; // Paraşütteyken savaş yok
+  }
+
+  // ── ARABADayken hareket ──
+  if(playerCar){
+    const car=playerCar;
+    if(joyActive&&(joyDelta.x||joyDelta.y)){
+      const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
+      const steer=joyDelta.x/len;
+      car.angle+=steer*0.07*dt*(car.speed/car.maxSpeed||0.3);
+      car.speed=Math.min(car.maxSpeed,car.speed+(car.acc||0.3)*dt);
+    } else {
+      car.speed*=Math.pow(car.friction||0.88,dt);
+      if(Math.abs(car.speed)<0.05)car.speed=0;
+    }
+    car.x+=Math.cos(car.angle)*car.speed*dt;
+    car.y+=Math.sin(car.angle)*car.speed*dt;
+    car.x=Math.max(10,Math.min(MAP-10,car.x));
+    car.y=Math.max(10,Math.min(MAP-10,car.y));
+    player.x=car.x; player.y=car.y; player.angle=car.angle;
+    // Arabaya çarpma — botlara hasar ver
+    if(car.speed>2){
+      bots.forEach(b=>{
+        if(!b.alive)return;
+        const dx=b.x-car.x,dy=b.y-car.y;
+        if(Math.hypot(dx,dy)<50){hitE(b,car.speed*2,true);if(!b.alive)onKill(b);}
+      });
+    }
+    // İn butonu göster
+    const eb=document.getElementById('exitCarBtn');
+    if(eb)eb.style.display='block';
+    // Bina/araba çarpışması — basit sınır kontrolü
+    player.x=car.x; player.y=car.y;
+    // Güvenli bölge ve normal update'in geri kalanını çalıştır
+    szTimer-=dt;if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
+    const _pdxC=player.x-safeZone.x,_pdyC=player.y-safeZone.y;
+    if(Math.sqrt(_pdxC*_pdxC+_pdyC*_pdyC)>safeZone.r){player.hp-=0.2*dt;if(player.hp<=0)dieDie();}
+    updateWildAnimals(dt);
+    return;
+  }
+
+  // ── BİNA İÇİNDEYKEN ──
+  if(inBuilding){
+    // Bina içinde hareket (sınırlı)
+    if(joyActive&&(joyDelta.x||joyDelta.y)){
+      const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
+      const nx=joyDelta.x/len,ny=joyDelta.y/len;
+      const spd=player.spd*dt*1.5;
+      const bld=inBuilding;
+      player.x=Math.max(bld.x+20,Math.min(bld.x+bld.w-20,player.x+nx*spd));
+      player.y=Math.max(bld.y+20,Math.min(bld.y+bld.h-20,player.y+ny*spd));
+      player.angle=Math.atan2(ny,nx);
+    }
+    // Bot saldırıları bina içinde de geçerli
+    bots.forEach(b=>{
+      if(!b.alive)return;
+      const dx=b.x-player.x,dy=b.y-player.y;
+      if(Math.hypot(dx,dy)<60){hitE(b,10,true);if(!b.alive)onKill(b);}
+    });
+    szTimer-=dt;if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
+    const _pdxB=player.x-safeZone.x,_pdyB=player.y-safeZone.y;
+    if(Math.sqrt(_pdxB*_pdxB+_pdyB*_pdyB)>safeZone.r){player.hp-=0.2*dt;if(player.hp<=0)dieDie();}
+    updateWildAnimals(dt);
+    // Çıkış butonu
+    const xb=document.getElementById('exitBuildBtn');
+    if(xb)xb.style.display='block';
+    return;
   }
 
   // ── BOYUT İÇİ HAREKET + PORTAL TESPİTİ ──────────────────
@@ -1883,6 +1981,7 @@ function update(dt){
   if(superCd>0)superCd-=dt;
   document.getElementById('supCd').textContent=superCd>0?Math.ceil(superCd/60)+'s':'';
   updateWildAnimals(dt);
+  checkNearCarAndBuilding();
   szTimer-=dt;
   if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
   const pdx=player.x-safeZone.x,pdy=player.y-safeZone.y;
@@ -2048,6 +2147,69 @@ function exitDimension(){
 
 function createCaptureBtn(){
   return document.getElementById('captureBtn');
+}
+
+function enterCar(){
+  if(playerCar||!mapObjects.cars)return;
+  const near=mapObjects.cars.find(c=>Math.hypot(c.x-player.x,c.y-player.y)<100);
+  if(!near)return;
+  playerCar=near;
+  near.driver='player';
+  document.getElementById('enterCarBtn').style.display='none';
+  document.getElementById('exitCarBtn').style.display='block';
+  addKillMsg('🚗 Arabaya bindin! Joystick ile sürebilirsin.');
+}
+
+function exitCar(){
+  if(!playerCar)return;
+  player.x=playerCar.x+60; player.y=playerCar.y+60;
+  playerCar.driver=null; playerCar.speed=0;
+  playerCar=null;
+  document.getElementById('exitCarBtn').style.display='none';
+}
+
+function enterBuilding(){
+  if(inBuilding||!mapObjects.buildings)return;
+  const near=mapObjects.buildings.find(b=>{
+    return player.x>b.x&&player.x<b.x+b.w&&player.y>b.y-40&&player.y<b.y+b.h;
+  });
+  if(!near)return;
+  inBuilding=near;
+  // Loot ver
+  if(near.loot&&!near._looted){
+    near._looted=true;
+    if(near.loot.type==='health'){
+      player.hp=Math.min(player.maxHp,player.hp+(near.loot.heal||30));
+      addKillMsg('💊 Bina içinde '+(near.loot.heal||30)+' can buldun!');
+    } else if(near.loot.type==='weapon'&&WEAPONS.length){
+      const w=WEAPONS[Math.floor(Math.random()*Math.min(3,WEAPONS.length))];
+      const tier=['bronze','silver','gold'][Math.floor(Math.random()*3)];
+      if(player.weapons.length<3){player.weapons.push({weapon:w,wid:WEAPONS.indexOf(w),tier});updateWSlots();addKillMsg('🔫 Bina içinde silah buldun: '+w.name+'!');}
+    }
+  }
+  document.getElementById('enterBuildBtn').style.display='none';
+  document.getElementById('exitBuildBtn').style.display='block';
+  addKillMsg('🏠 '+near.label+' içindesin. Korunuyorsun!');
+}
+
+function exitBuilding(){
+  if(!inBuilding)return;
+  player.x=inBuilding.x+inBuilding.w/2;
+  player.y=inBuilding.y+inBuilding.h+30;
+  inBuilding=null;
+  document.getElementById('exitBuildBtn').style.display='none';
+}
+
+function checkNearCarAndBuilding(){
+  if(curMap!=='combo'||playerCar||inBuilding)return;
+  // Araba yakınlık
+  const nearCar=mapObjects.cars&&mapObjects.cars.find(c=>!c.driver&&Math.hypot(c.x-player.x,c.y-player.y)<100);
+  document.getElementById('enterCarBtn').style.display=nearCar?'block':'none';
+  // Bina yakınlık
+  const nearBld=mapObjects.buildings&&mapObjects.buildings.find(b=>{
+    return player.x>b.x-30&&player.x<b.x+b.w+30&&player.y>b.y-60&&player.y<b.y+b.h+20;
+  });
+  document.getElementById('enterBuildBtn').style.display=nearBld?'block':'none';
 }
 
 function doCapture(){
@@ -2371,11 +2533,52 @@ function render2D(){
   ctx.clearRect(0,0,W,H);
   if(dimension==='cave'){renderCaveDim(W,H);renderMM();return;}
   if(dimension==='underwater'){renderUwDim(W,H);renderMM();return;}
+  if(inBuilding){renderBuildingInterior(W,H);renderMM();return;}
   if(camMode==='iso')renderIso(W,H);
   else if(camMode==='top')renderTop(W,H);
   else if(camMode==='third')renderThird(W,H);
   else renderFirst(W,H);
   renderMM();
+}
+
+function renderBuildingInterior(W,H){
+  const b=inBuilding;
+  // Arka plan — bina tipine göre
+  const floorCol={hut:'#c8a060',building:'#d0d0c8',igloo:'#e0f0ff',tent:'#d4b870',temple:'#8a7050',pyramid_entrance:'#c0a040'}[b.type]||'#c0b090';
+  const wallCol={hut:'#8B5E2A',building:'#8090a0',igloo:'#b0d0e8',tent:'#b89050',temple:'#504030',pyramid_entrance:'#a08030'}[b.type]||'#907050';
+  // Zemin
+  ctx.fillStyle=floorCol;ctx.fillRect(0,0,W,H);
+  // Duvar deseni
+  ctx.strokeStyle=wallCol;ctx.lineWidth=3;
+  for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // Etiket
+  ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(W/2-160,18,320,50);
+  ctx.fillStyle='#fff';ctx.font='bold 22px Arial';ctx.textAlign='center';
+  ctx.fillText('🏠 '+b.label+' İçi',W/2,52);
+  // Sandık / eşya
+  if(b._looted){
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(W/2-90,H/2-30,180,60);
+    ctx.fillStyle='#aaa';ctx.font='16px Arial';ctx.fillText('📦 Sandık boş',W/2,H/2+8);
+  } else {
+    ctx.fillStyle='#c8a030';ctx.fillRect(W/2-40,H/2-30,80,55);
+    ctx.strokeStyle='#604010';ctx.lineWidth=3;ctx.strokeRect(W/2-40,H/2-30,80,55);
+    ctx.fillStyle='#604010';ctx.fillRect(W/2-40,H/2-5,80,5);
+    ctx.fillStyle='#fff';ctx.font='bold 14px Arial';ctx.fillText('📦 Sandık!',W/2,H/2+40);
+  }
+  // Oyuncu
+  const cx=W/2,cy=H*0.72;
+  ctx.save();
+  drawCharSprite(ctx,player.char,64,cx-32,cy-32);
+  ctx.restore();
+  // Bina dışındaki botlar saldırabilir (yarı saydam pencere efekti)
+  ctx.fillStyle='rgba(0,0,0,0.18)';
+  ctx.fillRect(0,0,W,60);ctx.fillRect(0,H-60,W,60);
+  ctx.fillRect(0,0,60,H);ctx.fillRect(W-60,0,60,H);
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  ctx.fillRect(W-120,80,80,100);// pencere
+  ctx.fillRect(40,80,80,100);
+  ctx.textAlign='left';
 }
 function render(){
   try{
