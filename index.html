@@ -1377,6 +1377,21 @@ function genMap(mt){
     o.caves.push({x:MAP*0.12,y:MAP*0.78,r:200,isDeep:true});
     o.caves.push({x:MAP*0.18,y:MAP*0.85,r:120,isDeep:true});
     for(let i=0;i<10;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:140+R()*100});
+    // Nehir kıyısı kaya grupları
+    for(let i=0;i<160;i++) o.rocks.push({x:MAP*(0.05+R()*0.9),y:MAP*(0.05+R()*0.9),w:12+R()*28,h:8+R()*20,a:R()*Math.PI,isBeach:true});
+    // Şelaleler (büyük taşlar — nehir üzerinde)
+    o.waterfalls=[
+      {x:MAP*0.28,y:MAP*0.3,r:60},
+      {x:MAP*0.55,y:MAP*0.52,r:50},
+      {x:MAP*0.7,y:MAP*0.64,r:45},
+    ];
+    // Su sazlıkları/kamışlar nehir kenarlarına
+    for(let i=0;i<180;i++) o.bushes.push({x:MAP*(0.08+R()*0.84),y:MAP*(0.08+R()*0.84),r:10+R()*14,isReed:true});
+    // Çiçekli çalılar kıyıya
+    for(let i=0;i<120;i++) o.bushes.push({x:MAP*(0.05+R()*0.9),y:MAP*(0.05+R()*0.9),r:12+R()*16});
+    // Ahşap iskeleler nehir üstünde
+    o.bridges.push({x:MAP*0.42,y:MAP*0.46,a:0.6,w:110,isDock:true});
+    o.bridges.push({x:MAP*0.68,y:MAP*0.66,a:-0.3,w:100,isDock:true});
   }
   // ── ZOO haritası ──────────────────────────────────────────
   if(mt==='zoo'){
@@ -2154,6 +2169,30 @@ function renderCaveDim(W,H){
     ctx.beginPath(); r.pts.forEach((p,i)=>{const ip2=isoProjectDim(p.x,p.y,cx,cy,W,H);i===0?ctx.moveTo(p.x,p.y+Math.sin(now*0.002+p.x*0.005)*8):ctx.lineTo(p.x,p.y+Math.sin(now*0.002+p.x*0.005)*8);}); ctx.stroke();
   });
 
+  // Zemin çatlakları
+  ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=2;
+  [[cx+W*.1,cy+H*.3,cx+W*.22,cy+H*.38],[cx+W*.5,cy+H*.15,cx+W*.6,cy+H*.28],[cx+W*.72,cy+H*.55,cx+W*.8,cy+H*.62],[cx+W*.3,cy+H*.7,cx+W*.44,cy+H*.8],[cx+W*.65,cy+H*.82,cx+W*.78,cy+H*.9]].forEach(([x1,y1,x2,y2])=>{
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo((x1+x2)/2+(Math.random()-0.5)*20,( y1+y2)/2);ctx.lineTo(x2,y2);ctx.stroke();
+  });
+
+  // Kemikler / hayvan kalıntıları (statik dekor)
+  const boneSeeds=[{x:cx+W*.15,y:cy+H*.45},{x:cx+W*.38,y:cy+H*.22},{x:cx+W*.6,y:cy+H*.65},{x:cx+W*.8,y:cy+H*.35},{x:cx+W*.25,y:cy+H*.78}];
+  boneSeeds.forEach((b,i)=>{
+    ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(i*0.9);
+    ctx.fillStyle='rgba(200,190,170,0.6)';
+    ctx.fillRect(-20,-3,40,6); // kemik gövdesi
+    ctx.beginPath();ctx.arc(-20,0,6,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(20,0,6,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  });
+
+  // Damla efekti — sarkıtlardan düşen su
+  ctx.fillStyle=`rgba(0,200,160,${0.5+Math.sin(now*0.004)*0.4})`;
+  [W*.13,W*.29,W*.47,W*.68,W*.85].forEach((dx,i)=>{
+    const dropY=cy+((now*0.06+i*80)%H);
+    ctx.beginPath();ctx.ellipse(dx,dropY,2,4,0,0,Math.PI*2);ctx.fill();
+  });
+
   // Taşlar
   caveMap.rocks.forEach(r=>{
     const dx=r.x-player.x, dy=r.y-player.y;
@@ -2236,10 +2275,33 @@ function renderCaveDim(W,H){
   ctx.restore();
 
   // Sarkıtlar — ekranın üst kenarında sabit (kamera ile birlikte)
-  ctx.fillStyle='#18200e';
-  [W*.04,W*.11,W*.18,W*.26,W*.34,W*.44,W*.54,W*.63,W*.71,W*.80,W*.88,W*.95].forEach((sx,i)=>{
-    const sh=28+i%4*18; ctx.beginPath(); ctx.moveTo(sx-10,0); ctx.lineTo(sx+10,0); ctx.lineTo(sx+(i%2?4:-4),sh); ctx.closePath(); ctx.fill();
+  const stalPositions=[W*.02,W*.07,W*.13,W*.19,W*.25,W*.31,W*.38,W*.44,W*.50,W*.56,W*.62,W*.68,W*.74,W*.80,W*.86,W*.92,W*.97];
+  stalPositions.forEach((sx,i)=>{
+    const sh=22+i%5*22+Math.sin(i*1.7)*12;
+    const sw=7+i%3*5;
+    // Koyu taş sarkıt
+    ctx.fillStyle='#0e1a0a';
+    ctx.beginPath(); ctx.moveTo(sx-sw,0); ctx.lineTo(sx+sw,0); ctx.lineTo(sx+(i%2?3:-3),sh); ctx.closePath(); ctx.fill();
+    // Açık kenar
+    ctx.fillStyle='#1e2e18';
+    ctx.beginPath(); ctx.moveTo(sx-sw,0); ctx.lineTo(sx-sw+3,0); ctx.lineTo(sx+(i%2?0:-5),sh); ctx.closePath(); ctx.fill();
+    // Damla
+    if(i%3===0){
+      ctx.fillStyle=`rgba(0,200,160,${0.4+Math.sin(now*0.001+i)*0.3})`;
+      ctx.beginPath(); ctx.ellipse(sx+(i%2?3:-3),sh+4,2,3,0,0,Math.PI*2); ctx.fill();
+    }
   });
+  // Alt zemin sütunları (zemindan yükselen kaya)
+  ctx.save();
+  [W*.08,W*.22,W*.42,W*.58,W*.77,W*.91].forEach((sx,i)=>{
+    const sh=12+i%3*10;
+    const sy=H;
+    ctx.fillStyle='#1a2810';
+    ctx.beginPath(); ctx.moveTo(sx-8,sy); ctx.lineTo(sx+8,sy); ctx.lineTo(sx+(i%2?4:-4),sy-sh); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#253818';
+    ctx.beginPath(); ctx.moveTo(sx-8,sy); ctx.lineTo(sx-4,sy); ctx.lineTo(sx+(i%2?1:-6),sy-sh); ctx.closePath(); ctx.fill();
+  });
+  ctx.restore();
   // Kenar karartma vinyeti
   const vg=ctx.createRadialGradient(W/2,H/2,H*.22,W/2,H/2,H*.85);
   vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,5,3,0.82)');
@@ -2447,18 +2509,53 @@ function renderTop(W,H){
       // Sahil çizgisi
       ctx.strokeStyle='rgba(200,180,80,0.6)';ctx.lineWidth=6;ctx.beginPath();ctx.arc(isl.x,isl.y,isl.r*0.88,0,Math.PI*2);ctx.stroke();
     });
-    // Köprüler
+    // Köprüler ve iskeleler
     (mapObjects.bridges||[]).forEach(br=>{
       ctx.save();ctx.translate(br.x,br.y);ctx.rotate(br.a);
-      // Köprü tahtaları
-      ctx.fillStyle='#6a3a10';ctx.fillRect(-br.w/2,-14,br.w,28);
-      ctx.fillStyle='#8a5020';
-      for(let i=0;i<8;i++){ctx.fillRect(-br.w/2+i*(br.w/8),-14,br.w/9,28);}
-      // Korkuluklar
-      ctx.fillStyle='#4a2808';ctx.fillRect(-br.w/2,-18,br.w,4);ctx.fillRect(-br.w/2,14,br.w,4);
-      // Direkler
-      for(let i=0;i<=3;i++){ctx.fillStyle='#3a2008';ctx.fillRect(-br.w/2+i*(br.w/3)-4,-22,8,44);}
+      if(br.isDock){
+        // İskele — koyu ahşap
+        ctx.fillStyle='#3a2008';ctx.fillRect(-br.w/2,-18,br.w,36);
+        ctx.fillStyle='#5a3010';
+        for(let i=0;i<10;i++){ctx.fillRect(-br.w/2+i*(br.w/10),-18,br.w/11,36);}
+        ctx.fillStyle='#2a1404';ctx.fillRect(-br.w/2,-20,br.w,4);ctx.fillRect(-br.w/2,16,br.w,4);
+        for(let i=0;i<=4;i++){ctx.fillStyle='#1a0c02';ctx.fillRect(-br.w/2+i*(br.w/4)-3,-24,6,48);}
+      } else {
+        // Normal köprü
+        ctx.fillStyle='#6a3a10';ctx.fillRect(-br.w/2,-14,br.w,28);
+        ctx.fillStyle='#8a5020';
+        for(let i=0;i<8;i++){ctx.fillRect(-br.w/2+i*(br.w/8),-14,br.w/9,28);}
+        ctx.fillStyle='#4a2808';ctx.fillRect(-br.w/2,-18,br.w,4);ctx.fillRect(-br.w/2,14,br.w,4);
+        for(let i=0;i<=3;i++){ctx.fillStyle='#3a2008';ctx.fillRect(-br.w/2+i*(br.w/3)-4,-22,8,44);}
+      }
       ctx.restore();
+    });
+    // Şelaleler
+    (mapObjects.waterfalls||[]).forEach(wf=>{
+      if(!inView(wf.x,wf.y,wf.r*2))return;
+      // Büyük kaya
+      ctx.fillStyle='#6a5840';ctx.beginPath();ctx.ellipse(wf.x,wf.y,wf.r,wf.r*0.55,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#807060';ctx.beginPath();ctx.ellipse(wf.x-wf.r*0.1,wf.y-wf.r*0.1,wf.r*0.7,wf.r*0.38,0,0,Math.PI*2);ctx.fill();
+      // Dökülen su (beyaz köpüklü)
+      ctx.fillStyle='rgba(180,230,255,0.7)';ctx.beginPath();ctx.ellipse(wf.x,wf.y+wf.r*0.4,wf.r*0.6,wf.r*0.22,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.5)';
+      for(let i=0;i<5;i++){ctx.beginPath();ctx.ellipse(wf.x+(i-2)*wf.r*0.18,wf.y+wf.r*0.48,6,10,0,0,Math.PI*2);ctx.fill();}
+      // Etiket
+      ctx.fillStyle='rgba(120,200,255,0.9)';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+      ctx.fillText('💧',wf.x,wf.y-wf.r*0.8);
+    });
+    // Kamışlar (sazlık) — nehir kenarında
+    (mapObjects.bushes||[]).filter(b=>b.isReed).forEach(b=>{
+      if(!inView(b.x,b.y,b.r*2))return;
+      const rc=b.r;
+      ctx.fillStyle='#5a7830';
+      for(let i=0;i<4;i++){
+        const bx=b.x+(i-1.5)*rc*0.38;
+        const bh=rc*1.4+i%2*rc*0.4;
+        ctx.fillRect(bx-2,b.y-bh,4,bh);
+        // Başak
+        ctx.fillStyle='#8a6020';ctx.beginPath();ctx.ellipse(bx,b.y-bh,4,rc*0.3,0,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#5a7830';
+      }
     });
   }
 
@@ -2694,10 +2791,10 @@ function renderTop(W,H){
 // ── İZOMETRİK MOD (Zooba stili 3/4 görünüm) ──────────────
 function isoProject(wx,wy){
   const cx=canvas.width/2, cy=canvas.height*0.38;
-  const zoom=0.8;
+  const zoom=1.1;
   const px=(wx-player.x)*zoom;
   const py=(wy-player.y)*zoom;
-  return {x:cx+px, y:cy+py*0.52};
+  return {x:cx+px, y:cy+py*0.45};
 }
 
 // 3D blok çiz — Zooba stili
@@ -2961,7 +3058,7 @@ function renderIso(W,H){
 
     if(ent.type==='tree'){
       const t=ent.obj;
-      const tr=t.r*0.75;
+      const tr=t.r*1.6;
       isoTree(ip.x,ip.y,tr,p.tree||'#3a8820',p.tree2||'#2a6810','#5a3010');
     } else if(ent.type==='bot'){
       const b=ent.obj;
