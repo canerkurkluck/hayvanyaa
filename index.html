@@ -220,6 +220,7 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
     <div id="wSlots"></div>
     <div id="supCd"></div>
     <div id="joy"><div id="jB"><div id="jK"></div></div></div>
+    <button id="dalBtn" onclick="doDive()" style="display:none;position:absolute;bottom:210px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #00e5ff;background:radial-gradient(circle at 40% 35%,rgba(0,180,255,0.7),rgba(0,60,140,0.85));color:#fff;font-size:11px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 24px rgba(0,220,255,0.7),0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;">🤿<br>DAL</button>
     <div id="aBtns">
       <button class="ab" id="atkBtn" onclick="doAtk()">⚔️<br>SALDIR</button>
       <button class="ab" id="superBtn" onclick="doSuper()">✨<br>SÜPER</button>
@@ -285,6 +286,8 @@ let aliveN=30, kills=0;
 let safeZone={x:MAP/2, y:MAP/2, r:MAP*0.47};
 let parachute={active:false, x:0, y:0, targetX:0, targetY:0, alt:1}; // paraşüt inişi
 let inWater=false; // suda mı
+let isSubmerged=false; // su altında mı (timsah/köpekbalığı dalıyor)
+let underwaterFish=[]; // su altı balıkları
 let szTimer=600;
 let gState='lobby';
 let rafId=null, lastT=0;
@@ -1472,7 +1475,8 @@ function startGame(mode){
   const c=selChar;
   player={x:MAP/2+Math.random()*400-200,y:MAP/2+Math.random()*400-200,char:c,hp:c.hp||110,maxHp:c.hp||110,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0};
   spawnBots(29);
-  aliveN=30;kills=0;superCd=0;
+  aliveN=30;kills=0;superCd=0;isSubmerged=false;
+  initFish();
   safeZone={x:MAP/2,y:MAP/2,r:MAP*0.47};szTimer=700;
   // Paraşütle iniş başlat
   parachute={active:true,x:MAP/2,y:MAP/2,targetX:player.x,targetY:player.y,alt:1};
@@ -1540,17 +1544,29 @@ function update(dt){
       if(inWater)break;
     }
   }
-  // Su canlıları suda gizlenebilir
+  // Su canlıları suda gizlenebilir + DAL butonu
   const isWaterAnimal=['croc','shark'].includes(player.char.id);
+  const dalBtn=document.getElementById('dalBtn');
+  if(!inWater&&isSubmerged){isSubmerged=false;} // sudan çıkınca otomatik çık
   if(inWater&&isWaterAnimal){
-    player.hidden=true;
-    // Su efekti parçacıkları
-    if(Math.random()<0.15)particles.push({x:player.x+(Math.random()-0.5)*20,y:player.y+(Math.random()-0.5)*20,vx:(Math.random()-0.5)*2,vy:-Math.random()*2,life:20,col:'#60b0ff',r:3});
+    player.hidden=isSubmerged;
+    if(dalBtn) dalBtn.style.display=isSubmerged?'none':'block';
+    // Yavaşla — suda hız yarıya düşsün
+    player._waterSlow=true;
+    if(isSubmerged){
+      // Dalma baloncukları
+      if(Math.random()<0.2)particles.push({x:player.x+(Math.random()-0.5)*20,y:player.y-10,vx:(Math.random()-0.5)*1.2,vy:-Math.random()*2.5-0.5,life:30,col:'rgba(180,240,255,0.7)',r:3+Math.random()*3});
+    }
+  } else {
+    if(dalBtn) dalBtn.style.display='none';
+    player._waterSlow=false;
+    if(!inWater) isSubmerged=false;
   }
   if(joyActive&&(joyDelta.x||joyDelta.y)){
     const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
     const nx=joyDelta.x/len,ny=joyDelta.y/len;
-    const spd=player.spd*dt*2.2;
+    const waterMult=(inWater&&!isSubmerged&&!isWaterAnimal)?0.45:(inWater&&isSubmerged)?1.1:1;
+    const spd=player.spd*dt*2.2*waterMult;
     let newX=Math.max(10,Math.min(MAP-10,player.x+nx*spd));
     let newY=Math.max(10,Math.min(MAP-10,player.y+ny*spd));
     // X ve Y ayrı ayrı kontrol — köşelere takılmasın
@@ -1700,6 +1716,30 @@ function dropLoot(g){
 
 function addKF(msg){
   const f=document.getElementById('kfeed');const el=document.createElement('div');el.className='km';el.textContent=msg;f.appendChild(el);setTimeout(()=>el.remove(),3000);
+}
+
+function doDive(){
+  if(!inWater)return;
+  isSubmerged=!isSubmerged;
+  const btn=document.getElementById('dalBtn');
+  if(btn) btn.style.display='none';
+  // Dalma anında su sıçrama parçacıkları
+  for(let i=0;i<12;i++) particles.push({x:player.x+(Math.random()-0.5)*30,y:player.y+(Math.random()-0.5)*20,vx:(Math.random()-0.5)*4,vy:-Math.random()*4-1,life:25,col:'rgba(100,200,255,0.85)',r:4+Math.random()*4});
+}
+
+// Su altı balıklarını başlat
+function initFish(){
+  underwaterFish=[];
+  for(let i=0;i<18;i++){
+    underwaterFish.push({
+      ox:Math.random()*MAP, oy:Math.random()*MAP,
+      x:0,y:0,
+      vx:(Math.random()-0.5)*1.8,vy:(Math.random()-0.5)*0.6,
+      col:['#a0c8e0','#c0b080','#e08060','#80b0a0'][Math.floor(Math.random()*4)],
+      size:6+Math.random()*10,
+      wag:Math.random()*Math.PI*2,wagSpd:0.06+Math.random()*0.04
+    });
+  }
 }
 
 function doAtk(){
@@ -2569,6 +2609,152 @@ function renderIso(W,H){
     ctx.fillText('🪂 Joystick ile yönlen...',W/2,38);
     ctx.fillStyle='rgba(0,0,0,0.38)';ctx.fillRect(W/2-58,52,116,9);
     ctx.fillStyle='#f0c040';ctx.fillRect(W/2-58,52,116*alt,9);
+  }
+
+  // ── SU ALTI GÖRÜNÜMÜ ─────────────────────────────────────
+  if(isSubmerged){
+    const now=Date.now();
+
+    // Koyu teal su overlay — tüm ekranı kapla
+    const uwGrad=ctx.createLinearGradient(0,0,0,H);
+    uwGrad.addColorStop(0,'rgba(0,60,80,0.82)');
+    uwGrad.addColorStop(0.5,'rgba(0,90,110,0.72)');
+    uwGrad.addColorStop(1,'rgba(0,40,55,0.88)');
+    ctx.fillStyle=uwGrad;ctx.fillRect(0,0,W,H);
+
+    // Zemin kumu (ekranın altı)
+    const sandGrad=ctx.createLinearGradient(0,H*0.72,0,H);
+    sandGrad.addColorStop(0,'rgba(100,75,40,0)');
+    sandGrad.addColorStop(0.4,'rgba(110,82,44,0.7)');
+    sandGrad.addColorStop(1,'rgba(80,58,28,0.95)');
+    ctx.fillStyle=sandGrad;ctx.fillRect(0,H*0.72,W,H*0.28);
+
+    // Kum taşları
+    ctx.fillStyle='rgba(90,70,40,0.7)';
+    [[W*0.08,H*0.88,28,14],[W*0.22,H*0.92,18,10],[W*0.45,H*0.90,34,16],[W*0.65,H*0.87,22,12],[W*0.82,H*0.93,16,9],[W*0.92,H*0.89,26,13]].forEach(([x,y,rw,rh])=>{
+      ctx.beginPath();ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2);ctx.fill();
+    });
+    ctx.fillStyle='rgba(120,100,65,0.5)';
+    [[W*0.15,H*0.91,10,5],[W*0.55,H*0.93,8,4],[W*0.75,H*0.90,12,6]].forEach(([x,y,rw,rh])=>{
+      ctx.beginPath();ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2);ctx.fill();
+    });
+
+    // Deniz kabuğu ve para
+    [
+      {x:W*0.12,y:H*0.91,col:'#c8a0cc',type:'shell'},
+      {x:W*0.38,y:H*0.93,col:'#9ab8c0',type:'shell'},
+      {x:W*0.58,y:H*0.92,col:'#d4b870',type:'coin'},
+      {x:W*0.72,y:H*0.90,col:'#c0a060',type:'coin'},
+      {x:W*0.85,y:H*0.91,col:'#b8c8a0',type:'shell'},
+    ].forEach(o=>{
+      if(o.type==='shell'){
+        ctx.fillStyle=o.col;ctx.beginPath();ctx.ellipse(o.x,o.y,9,6,0.3,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(o.x,o.y-5);ctx.lineTo(o.x,o.y+5);ctx.stroke();
+      } else {
+        ctx.fillStyle=o.col;ctx.beginPath();ctx.arc(o.x,o.y,6,0,Math.PI*2);ctx.fill();
+        ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(o.x,o.y,6,0,Math.PI*2);ctx.stroke();
+      }
+    });
+
+    // Yosunlar (sallanıyor)
+    const seaweeds=[W*0.05,W*0.18,W*0.32,W*0.47,W*0.61,W*0.74,W*0.88];
+    seaweeds.forEach((sx,si)=>{
+      const h2=55+si%3*22;
+      const sway=Math.sin(now*0.0012+si*1.4)*14;
+      ctx.strokeStyle=`rgba(30,${120+si%3*25},60,0.85)`;ctx.lineWidth=4+si%2*2;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(sx,H*0.96);
+      ctx.bezierCurveTo(sx+sway*0.3,H*0.96-h2*0.33,sx+sway*0.7,H*0.96-h2*0.66,sx+sway,H*0.96-h2);
+      ctx.stroke();
+      // Yapraklar
+      ctx.strokeStyle=`rgba(50,${150+si%2*30},80,0.7)`;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(sx+sway*0.5,H*0.96-h2*0.5);
+      ctx.quadraticCurveTo(sx+sway*0.5+16,H*0.96-h2*0.5-8,sx+sway*0.5+22,H*0.96-h2*0.5);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(sx+sway*0.5,H*0.96-h2*0.5);
+      ctx.quadraticCurveTo(sx+sway*0.5-14,H*0.96-h2*0.5-7,sx+sway*0.5-18,H*0.96-h2*0.5+2);ctx.stroke();
+    });
+
+    // Kütük (batık)
+    ctx.save();ctx.translate(W*0.28,H*0.91);ctx.rotate(-0.12);
+    ctx.fillStyle='rgba(70,45,20,0.85)';ctx.fillRect(-55,-9,110,18);
+    ctx.fillStyle='rgba(100,70,35,0.6)';ctx.fillRect(-55,-9,110,7);
+    ctx.fillStyle='rgba(255,255,255,0.07)';ctx.font='bold 9px monospace';ctx.fillText('HAYVANYA',-50,3);
+    ctx.restore();
+
+    // Sandık (sağ tarafta)
+    ctx.save();ctx.translate(W*0.87,H*0.87);ctx.rotate(0.18);
+    ctx.fillStyle='rgba(80,55,25,0.9)';ctx.fillRect(-18,-16,36,32);
+    ctx.strokeStyle='rgba(140,110,50,0.8)';ctx.lineWidth=2;ctx.strokeRect(-18,-16,36,32);
+    ctx.strokeStyle='rgba(140,110,50,0.6)';ctx.beginPath();ctx.moveTo(-18,0);ctx.lineTo(18,0);ctx.stroke();
+    ctx.fillStyle='rgba(180,140,60,0.7)';ctx.beginPath();ctx.arc(0,0,4,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+
+    // Işık huzmesi (güneş ışığı yukarıdan geliyor)
+    const beams=[[W*0.3,-0.15],[W*0.5,-0.05],[W*0.65,-0.12],[W*0.2,-0.08]];
+    beams.forEach(([bx,off],i)=>{
+      const pulse=0.08+Math.sin(now*0.0008+i*1.7)*0.05;
+      const lg=ctx.createLinearGradient(bx,0,bx+60,H*0.75);
+      lg.addColorStop(0,`rgba(120,220,200,${pulse+0.06})`);
+      lg.addColorStop(0.6,`rgba(80,180,160,${pulse})`);
+      lg.addColorStop(1,'rgba(0,120,100,0)');
+      ctx.fillStyle=lg;ctx.beginPath();
+      ctx.moveTo(bx+off*W,0);ctx.lineTo(bx+off*W+40,0);
+      ctx.lineTo(bx+90,H*0.78);ctx.lineTo(bx-10,H*0.78);
+      ctx.closePath();ctx.fill();
+    });
+
+    // Su yüzeyi dalgaları (üstte)
+    ctx.fillStyle='rgba(80,180,200,0.18)';ctx.beginPath();ctx.moveTo(0,0);
+    for(let x=0;x<=W;x+=20){const wave=Math.sin(x*0.018+now*0.0015)*18+Math.sin(x*0.032+now*0.002)*10;ctx.lineTo(x,wave+28);}
+    ctx.lineTo(W,0);ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(160,230,220,0.1)';ctx.beginPath();ctx.moveTo(0,0);
+    for(let x=0;x<=W;x+=20){const wave=Math.sin(x*0.022+now*0.0011+1)*14+12;ctx.lineTo(x,wave);}
+    ctx.lineTo(W,0);ctx.closePath();ctx.fill();
+
+    // Baloncuklar
+    particles.filter(pt=>pt.col&&pt.col.includes('240')).forEach(pt=>{
+      const ix=pt.x-player.x+W/2,iy=pt.y-player.y+H/2;
+      ctx.globalAlpha=Math.max(0,(pt.life/30)*0.7);
+      ctx.strokeStyle='rgba(200,240,255,0.8)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(ix,iy,pt.r,0,Math.PI*2);ctx.stroke();
+    });
+    ctx.globalAlpha=1;
+
+    // Balıklar
+    underwaterFish.forEach((f,i)=>{
+      // Balık hareketi
+      f.wag+=f.wagSpd;
+      f.x=f.ox+(Math.sin(now*0.0005+i*2.3))*200+W/2;
+      f.y=f.oy%(H*0.65)+H*0.12+(Math.sin(now*0.0007+i*1.8))*30;
+      if(f.x>W+40){f.x=-40;f.ox=-40-W/2;}
+      if(f.x<-40){f.x=W+40;f.ox=W+40-W/2;}
+      const dir=f.vx>=0?1:-1;
+      ctx.save();ctx.translate(f.x,f.y);ctx.scale(dir,1);
+      ctx.globalAlpha=0.75;
+      // Gövde
+      ctx.fillStyle=f.col;ctx.beginPath();ctx.ellipse(0,0,f.size,f.size*0.42,0,0,Math.PI*2);ctx.fill();
+      // Kuyruk
+      const wag2=Math.sin(f.wag)*0.5;
+      ctx.beginPath();ctx.moveTo(-f.size*0.7,0);
+      ctx.lineTo(-f.size*1.4,f.size*0.5+wag2*8);ctx.lineTo(-f.size*1.4,-f.size*0.5+wag2*8);
+      ctx.closePath();ctx.fill();
+      // Göz
+      ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.arc(f.size*0.5,-f.size*0.1,f.size*0.13,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.5)';ctx.beginPath();ctx.arc(f.size*0.52,-f.size*0.12,f.size*0.05,0,Math.PI*2);ctx.fill();
+      // Işık çizgisi
+      ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(-f.size*0.3,-f.size*0.1);ctx.lineTo(f.size*0.4,-f.size*0.1);ctx.stroke();
+      ctx.restore();
+    });
+    ctx.globalAlpha=1;
+
+    // Su altı vinyeti (kenar karartma)
+    const vig=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.85);
+    vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,20,30,0.7)');
+    ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
+
+    // 'Yüzey' yazısı + çıkış ipucu
+    ctx.fillStyle='rgba(180,240,255,0.7)';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🤿 SU ALTINDASIN — DAL butonuna bas çıkmak için',W/2,H-22);
   }
 }
 
