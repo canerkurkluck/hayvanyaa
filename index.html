@@ -4944,10 +4944,10 @@ function render3D(){
       three.cam.position.set(p.x-dx*8, 5, p.z-dz*8);
       three.cam.lookAt(p.x+dx*2, 1.5, p.z+dz*2);
     } else if(camMode==='first'){
-      // 1. şahıs — karakterin gözünden
+      // 1. şahıs — karakterin gözünden, hareket yönüne bakıyor
       const dx=Math.sin(player.angle), dz=Math.cos(player.angle);
-      three.cam.position.set(p.x+dx*1.5, 3.5, p.z+dz*1.5);
-      three.cam.lookAt(p.x+dx*10, 2, p.z+dz*10);
+      three.cam.position.set(p.x, 3.5, p.z);
+      three.cam.lookAt(p.x+dx*10, 2.5, p.z-dz*10);
     }
   }
 
