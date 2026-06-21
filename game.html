@@ -4542,15 +4542,47 @@ function build3DMap(scene){
   const p=mapPal||{g1:'#5aaa3a',g2:'#4a9a2a'};
   const mapSize=MAP*SCALE;
 
-  // Zemin — büyük düz plaka
+  // Combo: önce tüm zemin okyanus mavisi, sonra bölgeler üstüne
+  const isCombo=curMap==='combo';
+  const baseCol=isCombo?0x1a7ab0:(new THREE.Color(p.g1||'#5aaa3a'));
   const groundGeo=new THREE.PlaneGeometry(mapSize,mapSize,1,1);
-  const groundMat=new THREE.MeshLambertMaterial({color:new THREE.Color(p.g1||'#5aaa3a')});
+  const groundMat=new THREE.MeshLambertMaterial({color:baseCol});
   const ground=new THREE.Mesh(groundGeo,groundMat);
   ground.rotation.x=-Math.PI/2;
+  ground.position.y=-0.1;
   ground.receiveShadow=true;
   scene.add(ground);
 
-  // Nehirler
+  // Combo: bölge zeminleri
+  if(isCombo&&mapObjects.comboZones){
+    const zones=mapObjects.comboZones;
+    const zoneColors={
+      tropical:0x3aaa20, city:0x909090, desert:0xd4a830,
+      ice:0xd0eeff, volcano:0x6a3020
+    };
+    Object.entries(zones).forEach(([name,z])=>{
+      const zw=z.w*SCALE, zh=z.h*SCALE;
+      const geo=new THREE.PlaneGeometry(zw,zh);
+      const mat=new THREE.MeshLambertMaterial({color:zoneColors[name]||0x5aaa3a});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.rotation.x=-Math.PI/2;
+      mesh.position.set((z.x+z.w/2-MAP/2)*SCALE, -0.05, (z.y+z.h/2-MAP/2)*SCALE);
+      mesh.receiveShadow=true;
+      scene.add(mesh);
+    });
+    // Volkan için koyu lav zemini
+    if(zones.volcano){
+      const vz=zones.volcano;
+      const vGeo=new THREE.PlaneGeometry(vz.w*SCALE*0.5,vz.h*SCALE*0.5);
+      const vMat=new THREE.MeshLambertMaterial({color:0xff3300});
+      const vMesh=new THREE.Mesh(vGeo,vMat);
+      vMesh.rotation.x=-Math.PI/2;
+      vMesh.position.set((vz.x+vz.w/2-MAP/2)*SCALE,-0.03,(vz.y+vz.h/2-MAP/2)*SCALE);
+      scene.add(vMesh);
+    }
+  }
+
+  // Nehirler / deniz / lav
   mapObjects.rivers.forEach(r=>{
     if(!r.pts||r.pts.length<2)return;
     for(let i=0;i<r.pts.length-1;i++){
@@ -4567,12 +4599,11 @@ function build3DMap(scene){
       const mesh=new THREE.Mesh(geo,mat);
       mesh.rotation.x=-Math.PI/2;
       mesh.rotation.z=-Math.atan2(dz,dx);
-      mesh.position.set((ta.x+tb.x)/2,-0.05,(ta.z+tb.z)/2);
+      mesh.position.set((ta.x+tb.x)/2,-0.02,(ta.z+tb.z)/2);
       scene.add(mesh);
     }
   });
 
-  // Yakın ağaç/taş/kütük render3D'de dinamik yüklenir
   t3.staticPool={trees:{},rocks:{},logs:{}};
 }
 
@@ -4896,11 +4927,28 @@ function render3D(){
     }
   }
 
-  // Kamera — Zooba izometrik açısı
+  // Kamera — camMode'a göre
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
-    three.cam.position.set(p.x, 18, p.z+22);
-    three.cam.lookAt(p.x, 1.5, p.z);
+    if(camMode==='iso'){
+      // Zooba izometrik — yukarıdan 45 derece
+      three.cam.position.set(p.x, 18, p.z+22);
+      three.cam.lookAt(p.x, 1.5, p.z);
+    } else if(camMode==='top'){
+      // Tam üstten
+      three.cam.position.set(p.x, 30, p.z+0.1);
+      three.cam.lookAt(p.x, 0, p.z);
+    } else if(camMode==='third'){
+      // 3. şahıs — arkadan yakın
+      const dx=Math.sin(player.angle), dz=Math.cos(player.angle);
+      three.cam.position.set(p.x-dx*8, 5, p.z-dz*8);
+      three.cam.lookAt(p.x+dx*2, 1.5, p.z+dz*2);
+    } else if(camMode==='first'){
+      // 1. şahıs — karakterin gözünden
+      const dx=Math.sin(player.angle), dz=Math.cos(player.angle);
+      three.cam.position.set(p.x+dx*1.5, 3.5, p.z+dz*1.5);
+      three.cam.lookAt(p.x+dx*10, 2, p.z+dz*10);
+    }
   }
 
   three.renderer.render(three.scene,three.cam);
