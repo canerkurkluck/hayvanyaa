@@ -4330,91 +4330,65 @@ function build3DMap(scene){
   ground.receiveShadow=true;
   scene.add(ground);
 
-  // Su/Nehir — düşük düzlemler
+  // Nehirler
   mapObjects.rivers.forEach(r=>{
-    if(r.pts.length<2)return;
-    // Her nehir segmenti için düzlem
+    if(!r.pts||r.pts.length<2)return;
     for(let i=0;i<r.pts.length-1;i++){
       const a=r.pts[i],b=r.pts[i+1];
+      if(!a||!b)continue;
       const ta=w2t(a.x,a.y),tb=w2t(b.x,b.y);
       const dx=tb.x-ta.x,dz=tb.z-ta.z;
       const len=Math.sqrt(dx*dx+dz*dz);
-      const w=(r.w||100)*SCALE*1.2;
-      const geo=new THREE.PlaneGeometry(len,w);
-      const mat=new THREE.MeshLambertMaterial({color:0x2a9070,transparent:true,opacity:0.9});
+      if(len<0.01)continue;
+      const rw=(r.w||100)*SCALE*1.2;
+      const col=r.isLava?0xff4400:r.isFrozen?0xa8d8f0:r.isSea?0x1a6890:0x2a9070;
+      const geo=new THREE.PlaneGeometry(len,rw);
+      const mat=new THREE.MeshLambertMaterial({color:col,transparent:true,opacity:0.9});
       const mesh=new THREE.Mesh(geo,mat);
       mesh.rotation.x=-Math.PI/2;
-      mesh.position.set((ta.x+tb.x)/2,-0.05,(ta.z+tb.z)/2);
       mesh.rotation.z=-Math.atan2(dz,dx);
-      mesh.rotation.x=-Math.PI/2;
+      mesh.position.set((ta.x+tb.x)/2,-0.05,(ta.z+tb.z)/2);
       scene.add(mesh);
-      // Su kenarı koyu
-      const edgeMat=new THREE.MeshLambertMaterial({color:0x1a6050,transparent:true,opacity:0.7});
-      const edgeGeo=new THREE.PlaneGeometry(len,w+0.3);
-      const edge=new THREE.Mesh(edgeGeo,edgeMat);
-      edge.rotation.x=-Math.PI/2;
-      edge.position.set((ta.x+tb.x)/2,-0.06,(ta.z+tb.z)/2);
-      edge.rotation.z=-Math.atan2(dz,dx);
-      edge.rotation.x=-Math.PI/2;
-      scene.add(edge);
     }
   });
 
-  // Ağaçlar
-  mapObjects.trees.forEach(t=>{
-    const pos=w2t(t.x,t.y);
-    const tree=make3DTree(pos.x,pos.z,t.r*SCALE*1.4,t.isPalm);
-    scene.add(tree);
-    t3.trees.push(tree);
-  });
-
-  // Taşlar
-  mapObjects.rocks.forEach(r=>{
-    if(r.isWater||r.isCageWall)return;
-    const pos=w2t(r.x,r.y);
-    const rock=make3DRock(pos.x,pos.z,r.w*SCALE,r.h*SCALE);
-    scene.add(rock);
-    t3.rocks.push(rock);
-  });
-
-  // Kütükler
-  mapObjects.logs.forEach(l=>{
-    const pos=w2t(l.x,l.y);
-    const log=make3DLog(pos.x,pos.z,l.w*SCALE,l.a);
-    scene.add(log);
-    t3.logs.push(log);
-  });
-
-  // Mağaralar
-  mapObjects.caves.forEach(c=>{
-    if(c.isBuilding)return;
-    const pos=w2t(c.x,c.y);
-    const cave=make3DCave(pos.x,pos.z,c.r*SCALE);
-    scene.add(cave);
-    t3.caves.push(cave);
-  });
-
-  // Çitleri/kafes duvarlarını taş olarak
-  mapObjects.rocks.filter(r=>r.isCageWall).forEach(r=>{
-    const pos=w2t(r.x,r.y);
-    const fence=make3DFence(pos.x,pos.z);
-    scene.add(fence);
-  });
+  // Yakın ağaç/taş/kütük render3D'de dinamik yüklenir
+  t3.staticPool={trees:{},rocks:{},logs:{}};
 }
 
-function make3DTree(x,z,r,isPalm){
+function make3DTree(x,z,r,isPalm,isCactus,isBurnt,isSnow){
   const group=new THREE.Group();
-  // Gövde
   const trunkH=r*2.2;
+  const trunkCol=isPalm?0x8B6914:isBurnt?0x2a1a08:0x5a3010;
   const trunkGeo=new THREE.CylinderGeometry(r*0.12,r*0.18,trunkH,6);
-  const trunkMat=new THREE.MeshLambertMaterial({color:isPalm?0x8B6914:0x5a3010});
+  const trunkMat=new THREE.MeshLambertMaterial({color:trunkCol});
   const trunk=new THREE.Mesh(trunkGeo,trunkMat);
   trunk.position.y=trunkH/2;
   trunk.castShadow=true;
   group.add(trunk);
 
-  if(isPalm){
-    // Palmiye — top şeklinde yeşil
+  if(isCactus){
+    const cGeo=new THREE.CylinderGeometry(r*0.18,r*0.22,trunkH*1.2,7);
+    const cMat=new THREE.MeshLambertMaterial({color:0x3a7a20});
+    const c=new THREE.Mesh(cGeo,cMat);
+    c.position.y=trunkH*0.6;
+    group.add(c);
+    [-1,1].forEach(side=>{
+      const aGeo=new THREE.CylinderGeometry(r*0.1,r*0.12,trunkH*0.5,6);
+      const a=new THREE.Mesh(aGeo,cMat);
+      a.rotation.z=side*Math.PI/3;
+      a.position.set(side*r*0.35,trunkH*0.7,0);
+      group.add(a);
+    });
+  } else if(isBurnt){
+    [[r*0.6,r*0.1,0],[r*0.3,r*0.05,r*0.5]].forEach(([rb,rt,yo])=>{
+      const geo=new THREE.ConeGeometry(rb,r*0.8,6);
+      const mat=new THREE.MeshLambertMaterial({color:0x1a0a00});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.position.y=trunkH+yo;
+      group.add(mesh);
+    });
+  } else if(isPalm){
     const leafGeo=new THREE.SphereGeometry(r*0.9,6,5);
     const leafMat=new THREE.MeshLambertMaterial({color:0x3aaa20});
     const leaf=new THREE.Mesh(leafGeo,leafMat);
@@ -4422,11 +4396,13 @@ function make3DTree(x,z,r,isPalm){
     leaf.castShadow=true;
     group.add(leaf);
   } else {
-    // Normal konik ağaç — 3 katman koni (Zooba stili)
-    const colors=[0x3a8820,0x2a7010,0x4a9830];
-    [[r*1.1,r*0.6,0],[r*0.85,r*0.55,r*0.55],[r*0.55,r*0.45,r*1.0]].forEach(([rb,rt,yo],i)=>{
+    const leafCol=isSnow?0xffffff:0x3a8820;
+    const c2=isSnow?0xddeeff:0x2a7010;
+    const c3=isSnow?0xeef8ff:0x4a9830;
+    [[r*1.1,0],[r*0.85,r*0.55],[r*0.55,r*1.0]].forEach(([rb,yo],i)=>{
       const geo=new THREE.ConeGeometry(rb,r*1.1,7);
-      const mat=new THREE.MeshLambertMaterial({color:colors[i]});
+      const col=i===0?leafCol:i===1?c2:c3;
+      const mat=new THREE.MeshLambertMaterial({color:col});
       const mesh=new THREE.Mesh(geo,mat);
       mesh.position.y=trunkH+yo+r*0.4;
       mesh.castShadow=true;
@@ -4613,11 +4589,85 @@ function render3D(){
     if(light) light.intensity=0.4+Math.sin(now*0.002)*0.3;
   });
 
+  // Dinamik ağaç/taş yükleme — sadece yakın nesneler
+  if(player&&player.alive&&mapObjects&&t3.staticPool){
+    const VIEW=28; // 3D birim yarıçapı
+    const UNLOAD=38;
+    const pp=w2t(player.x,player.y);
+
+    // Ağaçlar
+    if(mapObjects.trees){
+      mapObjects.trees.forEach((t,i)=>{
+        const tp=w2t(t.x,t.y);
+        const dx=tp.x-pp.x, dz=tp.z-pp.z;
+        const d2=dx*dx+dz*dz;
+        const key='t'+i;
+        if(d2<VIEW*VIEW){
+          if(!t3.staticPool.trees[key]){
+            const mesh=make3DTree(tp.x,tp.z,t.r*SCALE*1.4,t.isPalm,t.isCactus,t.isBurnt,t.isSnow);
+            three.scene.add(mesh);
+            t3.staticPool.trees[key]=mesh;
+          }
+        } else if(d2>UNLOAD*UNLOAD&&t3.staticPool.trees[key]){
+          three.scene.remove(t3.staticPool.trees[key]);
+          delete t3.staticPool.trees[key];
+        }
+      });
+    }
+    // Taşlar
+    if(mapObjects.rocks){
+      mapObjects.rocks.forEach((r,i)=>{
+        const rp=w2t(r.x,r.y);
+        const dx=rp.x-pp.x, dz=rp.z-pp.z;
+        const d2=dx*dx+dz*dz;
+        const key='r'+i;
+        if(d2<VIEW*VIEW){
+          if(!t3.staticPool.rocks[key]){
+            const geo=new THREE.DodecahedronGeometry(r.r*SCALE*0.9,0);
+            const mat=new THREE.MeshLambertMaterial({color:0x888070});
+            const mesh=new THREE.Mesh(geo,mat);
+            mesh.position.set(rp.x,r.r*SCALE*0.4,rp.z);
+            mesh.rotation.y=Math.random()*Math.PI;
+            three.scene.add(mesh);
+            t3.staticPool.rocks[key]=mesh;
+          }
+        } else if(d2>UNLOAD*UNLOAD&&t3.staticPool.rocks[key]){
+          three.scene.remove(t3.staticPool.rocks[key]);
+          delete t3.staticPool.rocks[key];
+        }
+      });
+    }
+    // Kütükler
+    if(mapObjects.logs){
+      mapObjects.logs.forEach((l,i)=>{
+        const lp=w2t(l.x,l.y);
+        const dx=lp.x-pp.x, dz=lp.z-pp.z;
+        const d2=dx*dx+dz*dz;
+        const key='l'+i;
+        if(d2<VIEW*VIEW){
+          if(!t3.staticPool.logs[key]){
+            const geo=new THREE.CylinderGeometry(l.r*SCALE*0.3,l.r*SCALE*0.35,(l.r||60)*SCALE*1.2,8);
+            const mat=new THREE.MeshLambertMaterial({color:0x5a3010});
+            const mesh=new THREE.Mesh(geo,mat);
+            mesh.rotation.z=Math.PI/2;
+            mesh.rotation.y=l.angle||0;
+            mesh.position.set(lp.x,l.r*SCALE*0.15,lp.z);
+            three.scene.add(mesh);
+            t3.staticPool.logs[key]=mesh;
+          }
+        } else if(d2>UNLOAD*UNLOAD&&t3.staticPool.logs[key]){
+          three.scene.remove(t3.staticPool.logs[key]);
+          delete t3.staticPool.logs[key];
+        }
+      });
+    }
+  }
+
   // Kamera — oyuncuyu takip et, Zooba izometrik açısı
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
     const camDist=22, camH=18;
-    const camAngle=-Math.PI*0.08; // hafif kuzey-doğu
+    const camAngle=-Math.PI*0.08;
     three.cam.position.set(
       p.x+Math.sin(camAngle)*camDist*0.3,
       camH,
