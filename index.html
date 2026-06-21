@@ -132,6 +132,7 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
     <div class="mc" onclick="selM(this,'cappadocia')"><div class="mi">🏔️</div><div class="mn">Kapadokya</div></div>
     <div class="mc" onclick="selM(this,'island')"><div class="mi">🏝️</div><div class="mn">Ada</div></div>
     <div class="mc" onclick="selM(this,'river')"><div class="mi">🏞️</div><div class="mn">Nehir Adaları</div></div>
+    <div class="mc" onclick="selM(this,'zoo')"><div class="mi">🦁</div><div class="mn">Hayvanat Bahçesi</div></div>
   </div>
   <div class="slabel" style="margin-top:10px">Kamera & Nişan</div>
   <div class="row">
@@ -1280,6 +1281,7 @@ function genMap(mt){
     cappadocia:{g1:'#c89850',g2:'#d4aa60',g3:'#b08040',tree:'#8a6030',tree2:'#a07840',bush:'#7a5828',rock:'#b08850'},
     island:  {g1:'#c4b050',g2:'#d4c060',g3:'#a89030',tree:'#1a5c10',tree2:'#226618',bush:'#c8a040',rock:'#9a9070'},
     river:   {g1:'#4a8c30',g2:'#5a9e3a',g3:'#3a7020',tree:'#1a5010',tree2:'#2a7018',bush:'#1a6010',rock:'#7a7060'},
+    zoo:     {g1:'#4aaa38',g2:'#55c040',g3:'#389028',tree:'#2a6818',tree2:'#3a8820',bush:'#2a7818',rock:'#888070'},
   };
   mapPal=pals[mt]||pals.forest;
 
@@ -1348,22 +1350,104 @@ function genMap(mt){
     o.caves.push({x:MAP*0.12,y:MAP*0.78,r:200,isDeep:true});
     o.caves.push({x:MAP*0.18,y:MAP*0.85,r:120,isDeep:true});
   }
-  // yollar
+  // ── ZOO haritası ──────────────────────────────────────────
+  if(mt==='zoo'){
+    // Merkezi büyük su havuzu (teal)
+    o.rocks.push({x:MAP*0.5,y:MAP*0.5,w:500,h:350,isWater:true,a:0});
+    // Sol küçük havuz
+    o.rocks.push({x:MAP*0.2,y:MAP*0.3,w:280,h:200,isWater:true,a:0});
+    // Sağ küçük havuz
+    o.rocks.push({x:MAP*0.78,y:MAP*0.65,w:240,h:170,isWater:true,a:0});
+    // Sağ üst havuzcuk
+    o.rocks.push({x:MAP*0.72,y:MAP*0.22,w:180,h:130,isWater:true,a:0});
+
+    // Ana yollar (zoo içi asfalt yollar)
+    // Yatay ana yol
+    o.paths.push({pts:[{x:0,y:MAP*0.5},{x:MAP*0.35,y:MAP*0.5},{x:MAP*0.65,y:MAP*0.5},{x:MAP,y:MAP*0.5}],isZooPath:true});
+    // Dikey ana yol
+    o.paths.push({pts:[{x:MAP*0.5,y:0},{x:MAP*0.5,y:MAP*0.35},{x:MAP*0.5,y:MAP*0.65},{x:MAP*0.5,y:MAP}],isZooPath:true});
+    // Çapraz yol sol-sağ
+    o.paths.push({pts:[{x:0,y:MAP*0.25},{x:MAP*0.25,y:MAP*0.25},{x:MAP*0.5,y:MAP*0.35},{x:MAP*0.75,y:MAP*0.4},{x:MAP,y:MAP*0.35}],isZooPath:true});
+    // Alt yol
+    o.paths.push({pts:[{x:0,y:MAP*0.75},{x:MAP*0.3,y:MAP*0.72},{x:MAP*0.6,y:MAP*0.76},{x:MAP,y:MAP*0.72}],isZooPath:true});
+
+    // Köprüler — havuzun üstünden
+    o.bridges=[
+      {x:MAP*0.5,y:MAP*0.38,a:Math.PI/2,w:120},  // kuzey köprüsü
+      {x:MAP*0.5,y:MAP*0.62,a:Math.PI/2,w:120},  // güney köprüsü
+      {x:MAP*0.38,y:MAP*0.5,a:0,w:120},           // batı köprüsü
+      {x:MAP*0.62,y:MAP*0.5,a:0,w:120},           // doğu köprüsü
+      {x:MAP*0.2,y:MAP*0.24,a:Math.PI/2,w:90},    // sol havuz köprüsü
+    ];
+
+    // Hayvan kafesleri (büyük kaya halkaları olarak gösterilir)
+    const cages=[
+      {cx:MAP*0.22,cy:MAP*0.7,r:160},   // aslan kafesi - sol alt
+      {cx:MAP*0.78,cy:MAP*0.35,r:150},  // zürafa kafesi - sağ üst
+      {cx:MAP*0.18,cy:MAP*0.52,r:120},  // maymun kafesi - sol orta
+      {cx:MAP*0.82,cy:MAP*0.75,r:130},  // fil kafesi - sağ alt
+      {cx:MAP*0.35,cy:MAP*0.2,r:110},   // penguen kafesi - sol üst
+      {cx:MAP*0.65,cy:MAP*0.82,r:100},  // yunus kafesi - alt orta
+    ];
+    // Kafes duvarlarını kaya olarak koy (halka şeklinde)
+    for(const cage of cages){
+      const wallCount=12;
+      for(let i=0;i<wallCount;i++){
+        const a=(i/wallCount)*Math.PI*2;
+        const wx=cage.cx+Math.cos(a)*cage.r;
+        const wy=cage.cy+Math.sin(a)*cage.r;
+        o.rocks.push({x:wx,y:wy,w:36,h:28,a:a,isCageWall:true});
+      }
+      // Kafes kapısı - 2 taş eksik (zaten 12'de 2 boşluk var, yeterli)
+      // Kafes içinde ağaç/dekor
+      for(let t=0;t<3;t++) o.trees.push({x:cage.cx+(R()-0.5)*cage.r*0.8,y:cage.cy+(R()-0.5)*cage.r*0.8,r:20+R()*15,variant:1,isCageTree:true});
+    }
+    o.cages=cages;
+
+    // Zoo binası - ana giriş (sol üst)
+    o.caves.push({x:MAP*0.1,y:MAP*0.12,r:180,isBuilding:true,label:'GİRİŞ'});
+    // Ziyaretçi merkezi (sağ alt)
+    o.caves.push({x:MAP*0.88,y:MAP*0.88,r:160,isBuilding:true,label:'MERKEZİ'});
+    // Kafeterya (orta üst)
+    o.caves.push({x:MAP*0.5,y:MAP*0.1,r:140,isBuilding:true,label:'KAFETERYA'});
+    // İlk yardım (sol alt)
+    o.caves.push({x:MAP*0.1,y:MAP*0.88,r:130,isBuilding:true,label:'YARDIM'});
+
+    // Zoo ağaçları — yollar boyunca sıralı
+    for(let i=0;i<12;i++){
+      const t=i/12;
+      o.trees.push({x:MAP*t,y:MAP*0.5-80,r:24,variant:0});
+      o.trees.push({x:MAP*t,y:MAP*0.5+80,r:24,variant:0});
+    }
+    for(let i=0;i<12;i++){
+      const t=i/12;
+      o.trees.push({x:MAP*0.5-80,y:MAP*t,r:24,variant:0});
+      o.trees.push({x:MAP*0.5+80,y:MAP*t,r:24,variant:0});
+    }
+    // Dağınık zoo ağaçları
+    for(let i=0;i<400;i++) o.trees.push({x:R()*MAP,y:R()*MAP,r:18+R()*20,variant:Math.floor(R()*3)});
+    // Çalılar
+    for(let i=0;i<500;i++) o.bushes.push({x:R()*MAP,y:R()*MAP,r:14+R()*16,variant:Math.floor(R()*2)});
+    // Dekoratif taşlar
+    for(let i=0;i<120;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:22+R()*36,h:14+R()*24,a:R()*Math.PI*2});
+    // Kütükler (bank olarak)
+    for(let i=0;i<80;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:50+R()*60,a:R()*Math.PI});
+  } else {
+  // yollar (zoo dışı haritalar)
   for(let p=0;p<4;p++){
     const pts=[];let px=R()*MAP,py=R()*MAP;
     for(let i=0;i<8;i++){px+=(R()-0.5)*1600;py+=(R()-0.5)*1600;pts.push({x:Math.max(0,Math.min(MAP,px)),y:Math.max(0,Math.min(MAP,py))});}
     o.paths.push({pts});
   }
-
   const tN=mt==='cappadocia'?600:mt==='river'?300:1800;
   if(mt!=='river') for(let i=0;i<tN;i++) o.trees.push({x:R()*MAP,y:R()*MAP,r:18+R()*22,variant:Math.floor(R()*3)});
   if(mt!=='river') for(let i=0;i<300;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:24+R()*44,h:16+R()*34,tall:mt==='cappadocia'&&R()<0.35,a:R()*Math.PI*2});
   for(let i=0;i<900;i++) o.bushes.push({x:R()*MAP,y:R()*MAP,r:14+R()*18,variant:Math.floor(R()*2)});
   if(mt!=='river') for(let i=0;i<30;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:60+R()*50});
   for(let i=0;i<250;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:60+R()*80,a:R()*Math.PI});
-
   // su yamaçları (ada)
   if(mt==='island') for(let i=0;i<8;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:200+R()*300,h:150+R()*200,isWater:true,a:0});
+  }
 
   // eşyalar
   for(let i=0;i<160;i++){const t=R()<0.1?'gold':R()<0.33?'silver':'bronze';const w=WEAPONS[Math.floor(R()*3)];items.push({x:R()*MAP,y:R()*MAP,type:'weapon',wid:WEAPONS.indexOf(w),weapon:w,tier:t,picked:false});}
@@ -2251,14 +2335,14 @@ function renderIso(W,H){
     ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
   });
 
-  // Mağaralar — koyu çukur
+  // Mağaralar — koyu çukur (zoo binaları ayrıca yukarda çizildi)
   mapObjects.caves.forEach(c=>{
+    if(c.isBuilding)return;
     const ip=isoProject(c.x,c.y);
     if(ip.x<-200||ip.x>W+200||ip.y<-200||ip.y>H+200)return;
     const cr=c.r*0.8,ch2=c.r*0.46;
     ctx.fillStyle='#1a1208';ctx.beginPath();ctx.ellipse(ip.x,ip.y,cr*1.5,ch2*0.8,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#0a0804';ctx.beginPath();ctx.ellipse(ip.x,ip.y,cr,ch2*0.6,0,0,Math.PI*2);ctx.fill();
-    // Kenar highlight
     ctx.strokeStyle='rgba(80,60,20,0.5)';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(ip.x,ip.y,cr*1.5,ch2*0.8,0,0,Math.PI*2);ctx.stroke();
   });
 
@@ -2292,9 +2376,62 @@ function renderIso(W,H){
     ctx.fillStyle='rgba(255,255,255,0.1)';ctx.beginPath();ctx.arc(ip.x-br*0.28,ip.y-br*0.32,br*0.32,0,Math.PI*2);ctx.fill();
   });
 
+  // Zoo su havuzları (isWater rocks) — teal göl
+  mapObjects.rocks.forEach(r=>{
+    if(!r.isWater)return;
+    const ip=isoProject(r.x,r.y);
+    if(ip.x<-400||ip.x>W+400||ip.y<-300||ip.y>H+300)return;
+    const pw=r.w*0.5,ph=r.h*0.28;
+    // Dış kenar koyu
+    ctx.fillStyle='#1a6050';ctx.beginPath();ctx.ellipse(ip.x,ip.y,pw+8,ph+5,0,0,Math.PI*2);ctx.fill();
+    // Su yüzeyi teal
+    ctx.fillStyle='#2a9880';ctx.beginPath();ctx.ellipse(ip.x,ip.y,pw,ph,0,0,Math.PI*2);ctx.fill();
+    // Işık yansıması
+    ctx.fillStyle='rgba(100,220,190,0.28)';ctx.beginPath();ctx.ellipse(ip.x-pw*0.25,ip.y-ph*0.3,pw*0.45,ph*0.35,0,0,Math.PI*2);ctx.fill();
+    // Küçük dalgalar
+    ctx.strokeStyle='rgba(180,255,230,0.18)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(ip.x,ip.y,pw*0.6,ph*0.45,0,0,Math.PI*2);ctx.stroke();
+  });
+
+  // Zoo kafes duvarları — gri beton bloklar
+  if(curMap==='zoo'){
+    mapObjects.rocks.forEach(r=>{
+      if(!r.isCageWall)return;
+      const ip=isoProject(r.x,r.y);
+      if(ip.x<-60||ip.x>W+60||ip.y<-60||ip.y>H+60)return;
+      // Küçük beton blok
+      ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(ip.x-10,ip.y+4,20,8);
+      ctx.fillStyle='#b0a898';ctx.fillRect(ip.x-9,ip.y-8,18,16);
+      ctx.fillStyle='#c8bfb0';ctx.fillRect(ip.x-9,ip.y-8,18,6);
+      ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(ip.x-7,ip.y-7,8,3);
+    });
+    // Zoo binaları — mağaralar yerine renkli 3D binalar
+    mapObjects.caves.forEach(c=>{
+      if(!c.isBuilding)return;
+      const ip=isoProject(c.x,c.y);
+      if(ip.x<-250||ip.x>W+250||ip.y<-250||ip.y>H+250)return;
+      const bw=c.r*0.7,bh=c.r*0.4;
+      // Gölge
+      ctx.fillStyle='rgba(0,0,0,0.18)';ctx.beginPath();ctx.ellipse(ip.x+6,ip.y+10,bw+14,bh+6,0,0,Math.PI*2);ctx.fill();
+      // Yan duvar (sağ)
+      ctx.fillStyle='#8a7060';ctx.beginPath();ctx.moveTo(ip.x+bw,ip.y);ctx.lineTo(ip.x+bw,ip.y-bh*2.2);ctx.lineTo(ip.x+bw-bw*0.15,ip.y-bh*2.5);ctx.lineTo(ip.x+bw-bw*0.15,ip.y-bh*0.3);ctx.closePath();ctx.fill();
+      // Ön duvar
+      ctx.fillStyle='#c8b090';ctx.beginPath();ctx.moveTo(ip.x-bw,ip.y);ctx.lineTo(ip.x+bw,ip.y);ctx.lineTo(ip.x+bw,ip.y-bh*2.2);ctx.lineTo(ip.x-bw,ip.y-bh*2.2);ctx.closePath();ctx.fill();
+      // Çatı
+      ctx.fillStyle='#e84040';ctx.beginPath();ctx.moveTo(ip.x-bw,ip.y-bh*2.2);ctx.lineTo(ip.x+bw,ip.y-bh*2.2);ctx.lineTo(ip.x,ip.y-bh*3.5);ctx.closePath();ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.2)';ctx.beginPath();ctx.moveTo(ip.x-bw,ip.y-bh*2.2);ctx.lineTo(ip.x,ip.y-bh*3.5);ctx.lineTo(ip.x-bw*0.6,ip.y-bh*2.2);ctx.closePath();ctx.fill();
+      // Pencereler
+      ctx.fillStyle='rgba(150,220,255,0.7)';ctx.fillRect(ip.x-bw*0.55,ip.y-bh*1.8,bw*0.3,bh*0.6);ctx.fillRect(ip.x+bw*0.15,ip.y-bh*1.8,bw*0.3,bh*0.6);
+      // Kapı
+      ctx.fillStyle='#5a3010';ctx.fillRect(ip.x-bw*0.12,ip.y-bh*1.1,bw*0.24,bh*1.05);
+      // Label
+      if(c.label){ctx.fillStyle='#ffffff';ctx.font='bold '+(bh*0.7)+'px sans-serif';ctx.textAlign='center';ctx.fillText(c.label,ip.x,ip.y-bh*0.2);}
+    });
+  }
+
   // Kayalar — 3D blok görünümü
   mapObjects.rocks.forEach(r=>{
-    if(r.isWater)return;
+    if(r.isWater||r.isCageWall)return;
     const ip=isoProject(r.x,r.y);
     if(ip.x<-100||ip.x>W+100||ip.y<-100||ip.y>H+100)return;
     const rw=r.w*0.5,rh=r.h*0.28;
