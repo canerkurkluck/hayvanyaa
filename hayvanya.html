@@ -119,6 +119,7 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
     <div class="mc" onclick="selM(this,'amazon')"><div class="mi">🌴</div><div class="mn">Amazon</div></div>
     <div class="mc" onclick="selM(this,'cappadocia')"><div class="mi">🏔️</div><div class="mn">Kapadokya</div></div>
     <div class="mc" onclick="selM(this,'island')"><div class="mi">🏝️</div><div class="mn">Ada</div></div>
+    <div class="mc" onclick="selM(this,'river')"><div class="mi">🏞️</div><div class="mn">Nehir Adaları</div></div>
   </div>
   <div class="slabel" style="margin-top:10px">Kamera & Nişan</div>
   <div class="row">
@@ -226,7 +227,7 @@ const CHARS = [
   {id:'croc',    n:'Timsah',    col:'#2a8040', mane:'#1a5028', sup:'Su Dalışı', supE:'💧'},
   {id:'lynx',    n:'Vaşak',     col:'#c08030', mane:'#7a4a18', sup:'Pusu',      supE:'👁️'},
   {id:'wolf',    n:'Kurt',      col:'#7080a0', mane:'#3a4060', sup:'Kurt Sürüsü',supE:'🐺'},
-  {id:'squirrel',n:'Sincap',    col:'#c05818', mane:'#7a3008', sup:'Can Yenile', supE:'🌰'},
+  {id:'squirrel',n:'Sincap',    col:'#c05818', mane:'#7a3008', sup:'Ağaca Tırman', supE:'🌰'},
   {id:'turtle',  n:'Shelly',    col:'#3a8040', mane:'#1a5020', sup:'Kalkan',    supE:'🛡️'},
   {id:'giraffe', n:'Pepper',    col:'#e0a020', mane:'#a06000', sup:'Uzak Nişan',supE:'🎯'},
   {id:'panda',   n:'Ollie',     col:'#e8e8e8', mane:'#222',   sup:'Yuvarlan',   supE:'💨'},
@@ -269,6 +270,8 @@ let joyActive=false, joyDelta={x:0,y:0}, joyOrigin={x:0,y:0};
 let superCd=0, superMax=300;
 let aliveN=30, kills=0;
 let safeZone={x:MAP/2, y:MAP/2, r:MAP*0.47};
+let parachute={active:false, x:0, y:0, targetX:0, targetY:0, alt:1}; // paraşüt inişi
+let inWater=false; // suda mı
 let szTimer=600;
 let gState='lobby';
 let rafId=null, lastT=0;
@@ -1256,6 +1259,7 @@ function genMap(mt){
     amazon:  {g1:'#155c10',g2:'#1e6e14',g3:'#0e4208',tree:'#0a3808',tree2:'#145210',bush:'#0a4a08',rock:'#5a5a4a'},
     cappadocia:{g1:'#c89850',g2:'#d4aa60',g3:'#b08040',tree:'#8a6030',tree2:'#a07840',bush:'#7a5828',rock:'#b08850'},
     island:  {g1:'#c4b050',g2:'#d4c060',g3:'#a89030',tree:'#1a5c10',tree2:'#226618',bush:'#c8a040',rock:'#9a9070'},
+    river:   {g1:'#4a8c30',g2:'#5a9e3a',g3:'#3a7020',tree:'#1a5010',tree2:'#2a7018',bush:'#1a6010',rock:'#7a7060'},
   };
   mapPal=pals[mt]||pals.forest;
 
@@ -1276,13 +1280,53 @@ function genMap(mt){
   for(let i=0;i<80;i++){gc2.beginPath();gc2.moveTo(R()*512,R()*512);gc2.lineTo(R()*512,R()*512);gc2.stroke();}
   gc2.globalAlpha=1;
 
-  // nehirler (yalnızca orman/amazon)
+  // nehirler
   if(mt==='forest'||mt==='amazon'){
     for(let r=0;r<3;r++){
       const pts=[];let rx=R()*MAP,ry=R()*MAP;
       for(let i=0;i<12;i++){rx+=((R()-0.5)*1200);ry+=((R()-0.5)*800);pts.push({x:Math.max(0,Math.min(MAP,rx)),y:Math.max(0,Math.min(MAP,ry))});}
       o.rivers.push({pts,w:18+R()*28});
     }
+  }
+  // nehir adaları haritası
+  if(mt==='river'){
+    // Ana büyük nehir — S şeklinde haritayı ikiye böler
+    const riverPts=[];
+    riverPts.push({x:MAP*0.1,y:MAP*0.3});
+    riverPts.push({x:MAP*0.25,y:MAP*0.25});
+    riverPts.push({x:MAP*0.4,y:MAP*0.35});
+    riverPts.push({x:MAP*0.5,y:MAP*0.5});
+    riverPts.push({x:MAP*0.6,y:MAP*0.62});
+    riverPts.push({x:MAP*0.75,y:MAP*0.68});
+    riverPts.push({x:MAP*0.9,y:MAP*0.75});
+    o.rivers.push({pts:riverPts,w:220,isMain:true});
+    // İkinci kol — sol üst köşeden
+    const river2=[];
+    river2.push({x:MAP*0.05,y:MAP*0.6});
+    river2.push({x:MAP*0.2,y:MAP*0.55});
+    river2.push({x:MAP*0.35,y:MAP*0.6});
+    river2.push({x:MAP*0.45,y:MAP*0.52});
+    o.rivers.push({pts:river2,w:120});
+    // Nehir adaları (ortada yeşil adacıklar)
+    o.islands=[
+      {x:MAP*0.38,y:MAP*0.42,r:180},  // büyük orta ada
+      {x:MAP*0.55,y:MAP*0.38,r:120},  // küçük sol ada
+      {x:MAP*0.62,y:MAP*0.55,r:90},   // sağ ada
+    ];
+    // Su altı bölgesi — nehirin derin kısmı
+    o.underwater={x:MAP*0.5,y:MAP*0.5,r:350};
+    // Köprüler
+    o.bridges=[
+      {x:MAP*0.32,y:MAP*0.38,a:0.4,w:160},
+      {x:MAP*0.58,y:MAP*0.6,a:0.2,w:140},
+    ];
+    // Sahil taşları
+    for(let i=0;i<80;i++) o.rocks.push({x:MAP*(0.1+R()*0.8),y:MAP*(0.1+R()*0.8),w:20+R()*35,h:14+R()*24,a:R()*Math.PI,isBeach:true});
+    // Palmiye ağaçları adaların etrafına
+    for(let i=0;i<200;i++) o.trees.push({x:MAP*(0.15+R()*0.7),y:MAP*(0.15+R()*0.7),r:22+R()*18,isPalm:true});
+    // Mağara bölgesi — haritanın sol alt köşesi
+    o.caves.push({x:MAP*0.12,y:MAP*0.78,r:200,isDeep:true});
+    o.caves.push({x:MAP*0.18,y:MAP*0.85,r:120,isDeep:true});
   }
   // yollar
   for(let p=0;p<4;p++){
@@ -1291,11 +1335,11 @@ function genMap(mt){
     o.paths.push({pts});
   }
 
-  const tN=mt==='cappadocia'?600:1800;
-  for(let i=0;i<tN;i++) o.trees.push({x:R()*MAP,y:R()*MAP,r:18+R()*22,variant:Math.floor(R()*3)});
-  for(let i=0;i<300;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:24+R()*44,h:16+R()*34,tall:mt==='cappadocia'&&R()<0.35,a:R()*Math.PI*2});
+  const tN=mt==='cappadocia'?600:mt==='river'?300:1800;
+  if(mt!=='river') for(let i=0;i<tN;i++) o.trees.push({x:R()*MAP,y:R()*MAP,r:18+R()*22,variant:Math.floor(R()*3)});
+  if(mt!=='river') for(let i=0;i<300;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:24+R()*44,h:16+R()*34,tall:mt==='cappadocia'&&R()<0.35,a:R()*Math.PI*2});
   for(let i=0;i<900;i++) o.bushes.push({x:R()*MAP,y:R()*MAP,r:14+R()*18,variant:Math.floor(R()*2)});
-  for(let i=0;i<30;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:60+R()*50});
+  if(mt!=='river') for(let i=0;i<30;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:60+R()*50});
   for(let i=0;i<250;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:60+R()*80,a:R()*Math.PI});
 
   // su yamaçları (ada)
@@ -1326,6 +1370,9 @@ function startGame(mode){
   spawnBots(29);
   aliveN=30;kills=0;superCd=0;
   safeZone={x:MAP/2,y:MAP/2,r:MAP*0.47};szTimer=700;
+  // Paraşütle iniş başlat
+  parachute={active:true,x:MAP/2,y:MAP/2,targetX:player.x,targetY:player.y,alt:1};
+  player.x=MAP/2;player.y=MAP/2; // haritanın ortasında başla
   document.getElementById('lobbyScreen').style.display='none';
   document.getElementById('gameWrap').style.display='block';
   document.getElementById('deathS').style.display='none';
@@ -1354,6 +1401,48 @@ function frame(ts){
 
 function update(dt){
   if(!player.alive)return;
+
+  // ── PARAŞÜT İNİŞİ ──
+  if(parachute.active){
+    parachute.alt=Math.max(0,parachute.alt-0.008*dt);
+    // Joystick ile hedef yönlendir
+    if(joyActive&&(joyDelta.x||joyDelta.y)){
+      const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
+      player.x+=joyDelta.x/len*6*dt;
+      player.y+=joyDelta.y/len*6*dt;
+    }
+    if(parachute.alt<=0){
+      parachute.active=false;
+      // İniş efekti
+      for(let i=0;i<12;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:25,col:'#c8b060',r:5});
+      addKF('İniş yaptın! ✅');
+    }
+    return; // Paraşütteyken savaş yok
+  }
+
+  // ── SU KONTROLÜ (timsah/köpekbalığı) ──
+  inWater=false;
+  if(curMap==='river'&&mapObjects.rivers){
+    for(const r of mapObjects.rivers){
+      if(r.pts.length<2)continue;
+      // Nehir üzerinde mi — basit nokta-çizgi mesafe kontrolü
+      for(let i=0;i<r.pts.length-1;i++){
+        const ax=r.pts[i].x,ay=r.pts[i].y,bx=r.pts[i+1].x,by=r.pts[i+1].y;
+        const dx=bx-ax,dy=by-ay,len=Math.sqrt(dx*dx+dy*dy);
+        const t=Math.max(0,Math.min(1,((player.x-ax)*dx+(player.y-ay)*dy)/(len*len)));
+        const px=ax+t*dx,py=ay+t*dy;
+        if(Math.hypot(player.x-px,player.y-py)<r.w*1.2){inWater=true;break;}
+      }
+      if(inWater)break;
+    }
+  }
+  // Su canlıları suda gizlenebilir
+  const isWaterAnimal=['croc','shark'].includes(player.char.id);
+  if(inWater&&isWaterAnimal){
+    player.hidden=true;
+    // Su efekti parçacıkları
+    if(Math.random()<0.15)particles.push({x:player.x+(Math.random()-0.5)*20,y:player.y+(Math.random()-0.5)*20,vx:(Math.random()-0.5)*2,vy:-Math.random()*2,life:20,col:'#60b0ff',r:3});
+  }
   if(joyActive&&(joyDelta.x||joyDelta.y)){
     const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
     const nx=joyDelta.x/len,ny=joyDelta.y/len;
@@ -1553,10 +1642,21 @@ function doSuper(){
     for(let i=0;i<4;i++){const a=player.angle+(i-1.5)*0.55;const c=CHARS[3];bots.push({x:player.x+Math.cos(a)*90,y:player.y+Math.sin(a)*90,char:c,hp:35,maxHp:35,spd:4.5,angle:0,alive:true,weapons:[],activeW:0,ai:{state:'chase',timer:0,mx:0,my:0},team:null,superCd:999,frozen:0,isWolfBot:true});aliveN++;}
 
   } else if(id==='squirrel'){
-    // Can Yenile + hız patlaması
-    player.hp=Math.min(player.maxHp,player.hp+60);player.spd*=2.5;
-    setTimeout(()=>player.spd=player.char.spd||3.2,2000);
-    for(let i=0;i<8;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:20,col:'#80ff80',r:4});
+    // Ağaca Tırman: en yakın ağacı bul, oraya koş ve tırman
+    let nearest=null, minD=9999;
+    for(const t of mapObjects.trees){const d=Math.hypot(t.x-player.x,t.y-player.y);if(d<minD){minD=d;nearest=t;}}
+    if(nearest&&minD<600){
+      // Ağaca ışınlan ve tırman
+      player.x=nearest.x; player.y=nearest.y;
+      climbedTree=nearest; climbHeight=1;
+      addKF('🌰 Sincap ağaca tırmandı! Gizlisin.');
+      player.hidden=true;
+      for(let i=0;i<10;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*5,vy:-Math.random()*5,life:25,col:'#80c040',r:4});
+      // 4 saniye sonra in
+      setTimeout(()=>{climbedTree=null;climbHeight=0;player.hidden=false;addKF('Sincap indi!');},4000);
+    } else {
+      addKF('Yakında ağaç yok!');
+    }
 
   } else if(id==='turtle'){
     // Kalkan: hasar almaz + çevresindekilere zırh kırma
@@ -1748,13 +1848,60 @@ function renderTop(W,H){
   // nehirler
   mapObjects.rivers.forEach(r=>{
     if(r.pts.length<2)return;
-    ctx.strokeStyle='#1848a0';ctx.lineWidth=r.w*2;ctx.lineCap='round';ctx.lineJoin='round';
+    // Ana nehir daha geniş ve mavi
+    const baseW = r.isMain ? r.w*2.5 : r.w*2;
+    ctx.strokeStyle=r.isMain?'#1060c8':'#1848a0';ctx.lineWidth=baseW;ctx.lineCap='round';ctx.lineJoin='round';
     ctx.beginPath();ctx.moveTo(r.pts[0].x,r.pts[0].y);
     r.pts.slice(1).forEach(pt=>ctx.lineTo(pt.x,pt.y));ctx.stroke();
-    ctx.strokeStyle='rgba(80,140,255,0.3)';ctx.lineWidth=r.w*0.8;
+    // Su yansıması
+    ctx.strokeStyle='rgba(100,180,255,0.35)';ctx.lineWidth=r.w*0.6;
     ctx.beginPath();ctx.moveTo(r.pts[0].x,r.pts[0].y);
     r.pts.slice(1).forEach(pt=>ctx.lineTo(pt.x,pt.y));ctx.stroke();
+    // Dalgacıklar
+    ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=r.w*0.2;ctx.setLineDash([30,20]);
+    ctx.beginPath();ctx.moveTo(r.pts[0].x,r.pts[0].y);
+    r.pts.slice(1).forEach(pt=>ctx.lineTo(pt.x,pt.y));ctx.stroke();ctx.setLineDash([]);
   });
+
+  // Nehir adaları haritası özel çizimler
+  if(curMap==='river'){
+    // Su altı bölgesi (derin koyu alan)
+    const uw=mapObjects.underwater;
+    if(uw){
+      const uwg=ctx.createRadialGradient(uw.x,uw.y,uw.r*0.2,uw.x,uw.y,uw.r);
+      uwg.addColorStop(0,'rgba(0,40,120,0.7)');uwg.addColorStop(1,'rgba(0,20,80,0)');
+      ctx.fillStyle=uwg;ctx.beginPath();ctx.arc(uw.x,uw.y,uw.r,0,Math.PI*2);ctx.fill();
+      // Su altı ışık huzmesi
+      ctx.fillStyle='rgba(100,200,255,0.08)';
+      for(let i=0;i<5;i++){const a=-Math.PI/2+i*0.3;ctx.beginPath();ctx.moveTo(uw.x+Math.cos(a)*20,uw.y-uw.r*0.8);ctx.lineTo(uw.x+Math.cos(a)*80,uw.y+uw.r*0.5);ctx.lineTo(uw.x+Math.cos(a+0.15)*80,uw.y+uw.r*0.5);ctx.closePath();ctx.fill();}
+    }
+    // Adalar (su üzerinde yeşil bölgeler)
+    (mapObjects.islands||[]).forEach(isl=>{
+      // Ada gölgesi
+      ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.ellipse(isl.x+isl.r*0.15,isl.y+isl.r*0.15,isl.r*1.05,isl.r*0.9,0,0,Math.PI*2);ctx.fill();
+      // Ada zemini — kumlu sahil kenarı
+      ctx.fillStyle='#c8b060';ctx.beginPath();ctx.arc(isl.x,isl.y,isl.r,0,Math.PI*2);ctx.fill();
+      // İç yeşil
+      const ig=ctx.createRadialGradient(isl.x-isl.r*0.2,isl.y-isl.r*0.2,isl.r*0.1,isl.x,isl.y,isl.r*0.78);
+      ig.addColorStop(0,'#5aae30');ig.addColorStop(1,'#3a8820');
+      ctx.fillStyle=ig;ctx.beginPath();ctx.arc(isl.x,isl.y,isl.r*0.78,0,Math.PI*2);ctx.fill();
+      // Sahil çizgisi
+      ctx.strokeStyle='rgba(200,180,80,0.6)';ctx.lineWidth=6;ctx.beginPath();ctx.arc(isl.x,isl.y,isl.r*0.88,0,Math.PI*2);ctx.stroke();
+    });
+    // Köprüler
+    (mapObjects.bridges||[]).forEach(br=>{
+      ctx.save();ctx.translate(br.x,br.y);ctx.rotate(br.a);
+      // Köprü tahtaları
+      ctx.fillStyle='#6a3a10';ctx.fillRect(-br.w/2,-14,br.w,28);
+      ctx.fillStyle='#8a5020';
+      for(let i=0;i<8;i++){ctx.fillRect(-br.w/2+i*(br.w/8),−14,br.w/9,28);}
+      // Korkuluklar
+      ctx.fillStyle='#4a2808';ctx.fillRect(-br.w/2,-18,br.w,4);ctx.fillRect(-br.w/2,14,br.w,4);
+      // Direkler
+      for(let i=0;i<=3;i++){ctx.fillStyle='#3a2008';ctx.fillRect(-br.w/2+i*(br.w/3)-4,-22,8,44);}
+      ctx.restore();
+    });
+  }
 
   // yollar
   mapObjects.paths.forEach(r=>{
@@ -1933,6 +2080,56 @@ function renderTop(W,H){
     ctx.strokeStyle='rgba(255,255,100,0.55)';ctx.lineWidth=2;ctx.setLineDash([5,4]);
     ctx.beginPath();ctx.moveTo(player.x+Math.cos(player.angle)*28,player.y+Math.sin(player.angle)*28);
     ctx.lineTo(player.x+Math.cos(player.angle)*52,player.y+Math.sin(player.angle)*52);ctx.stroke();ctx.setLineDash([]);
+
+    // Su altı overlay — su canlısı suda
+    if(inWater&&['croc','shark'].includes(player.char.id)){
+      ctx.save();
+      ctx.fillStyle='rgba(0,80,200,0.18)';ctx.beginPath();ctx.arc(player.x,player.y,50,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(100,200,255,0.6)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(player.x,player.y,50,0,Math.PI*2);ctx.stroke();
+      ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillStyle='#80d0ff';ctx.fillText('Su Altı 🌊',player.x,player.y-58);
+      ctx.restore();
+    }
+  }
+
+  // ── PARAŞÜT ÇİZİMİ ──
+  if(parachute.active&&player.alive){
+    const px=player.x, py=player.y;
+    const alt=parachute.alt; // 1→0
+    const scale=0.5+alt*0.8;
+    ctx.save();
+    ctx.globalAlpha=0.92;
+    // Gölge (yere düşünce büyür)
+    ctx.fillStyle=`rgba(0,0,0,${0.15+0.2*(1-alt)})`;
+    ctx.beginPath();ctx.ellipse(px,py,(1-alt)*60+10,(1-alt)*20+4,0,0,Math.PI*2);ctx.fill();
+    // Paraşüt kubbe
+    ctx.save();ctx.translate(px,py-alt*200*scale);ctx.scale(scale,scale);
+    // Kubbe ana renk
+    const pg=ctx.createRadialGradient(-20,-30,5,0,0,70);
+    pg.addColorStop(0,'#f0c040');pg.addColorStop(0.5,'#e08010');pg.addColorStop(1,'#a05000');
+    ctx.fillStyle=pg;ctx.beginPath();ctx.arc(0,0,70,Math.PI,0);ctx.fill();
+    // Kubbe dilimleri
+    ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=2;
+    for(let i=0;i<=6;i++){const a=Math.PI+i*(Math.PI/6);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*70,Math.sin(a)*70);ctx.stroke();}
+    // İpler
+    ctx.strokeStyle='rgba(100,60,20,0.7)';ctx.lineWidth=1;
+    [[-30,0],[30,0],[-10,0],[10,0]].forEach(([ox,oy])=>{
+      ctx.beginPath();ctx.moveTo(ox,oy);ctx.lineTo(0,80);ctx.stroke();
+    });
+    // Karakter (küçük)
+    ctx.fillStyle=player.char.col;ctx.beginPath();ctx.arc(0,85,12,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+    ctx.fillText(player.char.n,0,110);
+    ctx.restore();
+    ctx.restore();
+
+    // İniş göstergesi
+    ctx.save();
+    ctx.fillStyle='rgba(255,255,255,0.85)';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🪂 Joystick ile yönlen — iniş yapılıyor...',canvas.width/2,40);
+    // Yükseklik çubuğu
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(canvas.width/2-60,55,120,10);
+    ctx.fillStyle='#f0c040';ctx.fillRect(canvas.width/2-60,55,120*alt,10);
+    ctx.restore();
   }
   ctx.restore();
 }
