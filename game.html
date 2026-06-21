@@ -288,6 +288,8 @@ let parachute={active:false, x:0, y:0, targetX:0, targetY:0, alt:1}; // paraşü
 let inWater=false; // suda mı
 let isSubmerged=false; // su altında mı (timsah/köpekbalığı dalıyor)
 let underwaterFish=[]; // su altı balıkları
+let inCave=false; // mağarada mı
+let prevCamMode='iso'; // dalma öncesi kamera modu
 let szTimer=600;
 let gState='lobby';
 let rafId=null, lastT=0;
@@ -1475,7 +1477,7 @@ function startGame(mode){
   const c=selChar;
   player={x:MAP/2+Math.random()*400-200,y:MAP/2+Math.random()*400-200,char:c,hp:c.hp||110,maxHp:c.hp||110,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0};
   spawnBots(29);
-  aliveN=30;kills=0;superCd=0;isSubmerged=false;
+  aliveN=30;kills=0;superCd=0;isSubmerged=false;inCave=false;
   initFish();
   safeZone={x:MAP/2,y:MAP/2,r:MAP*0.47};szTimer=700;
   // Paraşütle iniş başlat
@@ -1560,7 +1562,20 @@ function update(dt){
   } else {
     if(dalBtn) dalBtn.style.display='none';
     player._waterSlow=false;
-    if(!inWater) isSubmerged=false;
+    if(!inWater){
+      if(isSubmerged){
+        // Suyun dışına çıktı — kamerayı geri al
+        isSubmerged=false;
+        camMode=prevCamMode;
+        document.getElementById('camBtn').textContent='📷 '+(camMode==='iso'?'Zooba':camMode==='top'?'Üstten':camMode==='third'?'3. Şahıs':'1. Şahıs');
+      }
+    }
+  }
+  // ── MAĞARA TESPİTİ ───────────────────────────────────────
+  inCave=false;
+  for(const c of mapObjects.caves){
+    if(c.isBuilding)continue;
+    if(Math.hypot(player.x-c.x,player.y-c.y)<c.r*0.85){inCave=true;break;}
   }
   if(joyActive&&(joyDelta.x||joyDelta.y)){
     const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
@@ -1720,10 +1735,20 @@ function addKF(msg){
 
 function doDive(){
   if(!inWater)return;
-  isSubmerged=!isSubmerged;
+  if(!isSubmerged){
+    // Dalmaya başla — birinci şahısa geç
+    prevCamMode=camMode;
+    camMode='first';
+    document.getElementById('camBtn').textContent='📷 1. Şahıs';
+    isSubmerged=true;
+  } else {
+    // Yüzeye çık — önceki kameraya dön
+    isSubmerged=false;
+    camMode=prevCamMode;
+    document.getElementById('camBtn').textContent='📷 '+(camMode==='iso'?'Zooba':camMode==='top'?'Üstten':camMode==='third'?'3. Şahıs':'1. Şahıs');
+  }
   const btn=document.getElementById('dalBtn');
   if(btn) btn.style.display='none';
-  // Dalma anında su sıçrama parçacıkları
   for(let i=0;i<12;i++) particles.push({x:player.x+(Math.random()-0.5)*30,y:player.y+(Math.random()-0.5)*20,vx:(Math.random()-0.5)*4,vy:-Math.random()*4-1,life:25,col:'rgba(100,200,255,0.85)',r:4+Math.random()*4});
 }
 
@@ -2915,6 +2940,213 @@ function renderFirst(W,H){
   const pc2=document.createElement('canvas');pc2.width=38;pc2.height=38;
   drawCharSprite(pc2.getContext('2d'),player.char,38);
   ctx.drawImage(pc2,12,H-118);
+
+  // ── SU ALTI OVERLAY (birinci şahıs dalma) ────────────────
+  if(isSubmerged){
+    const now=Date.now();
+    // Tam ekran teal su overlay
+    const uwG=ctx.createLinearGradient(0,0,0,H);
+    uwG.addColorStop(0,'rgba(0,55,75,0.78)');
+    uwG.addColorStop(0.45,'rgba(0,85,105,0.68)');
+    uwG.addColorStop(1,'rgba(0,35,50,0.86)');
+    ctx.fillStyle=uwG;ctx.fillRect(0,0,W,H);
+
+    // Su yüzeyi dalgaları — ekranın üstünde
+    ctx.fillStyle='rgba(80,190,210,0.22)';ctx.beginPath();ctx.moveTo(0,0);
+    for(let x=0;x<=W;x+=18){ctx.lineTo(x,Math.sin(x*0.02+now*0.0016)*20+Math.sin(x*0.035+now*0.0022)*12+32);}
+    ctx.lineTo(W,0);ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(160,235,225,0.12)';ctx.beginPath();ctx.moveTo(0,0);
+    for(let x=0;x<=W;x+=18){ctx.lineTo(x,Math.sin(x*0.025+now*0.0013+1.4)*14+14);}
+    ctx.lineTo(W,0);ctx.closePath();ctx.fill();
+
+    // Zemin kumu (alt %28)
+    const sandG=ctx.createLinearGradient(0,H*0.72,0,H);
+    sandG.addColorStop(0,'rgba(95,72,38,0)');
+    sandG.addColorStop(0.35,'rgba(108,80,42,0.72)');
+    sandG.addColorStop(1,'rgba(75,54,25,0.96)');
+    ctx.fillStyle=sandG;ctx.fillRect(0,H*0.72,W,H*0.28);
+
+    // Kum taşları
+    [[W*.08,H*.88,28,13],[W*.22,H*.92,18,9],[W*.44,H*.90,34,15],[W*.63,H*.87,24,12],[W*.80,H*.93,17,8],[W*.91,H*.89,26,12]].forEach(([x,y,rw,rh])=>{
+      ctx.fillStyle='rgba(82,64,36,0.72)';ctx.beginPath();ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2);ctx.fill();
+    });
+    // Renkli kabuklar + paralar
+    [{x:W*.11,y:H*.91,col:'#c8a0cc',sh:1},{x:W*.37,y:H*.93,col:'#9ab8c0',sh:1},{x:W*.56,y:H*.92,col:'#d4b870',sh:0},{x:W*.70,y:H*.90,col:'#c0a060',sh:0},{x:W*.84,y:H*.91,col:'#b4c89a',sh:1},{x:W*.48,y:H*.94,col:'#8ac0b0',sh:1}].forEach(o=>{
+      if(o.sh){ctx.fillStyle=o.col;ctx.beginPath();ctx.ellipse(o.x,o.y,9,6,0.3,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(o.x,o.y-5);ctx.lineTo(o.x,o.y+5);ctx.stroke();}
+      else{ctx.fillStyle=o.col;ctx.beginPath();ctx.arc(o.x,o.y,6,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(255,255,255,0.45)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(o.x,o.y,6,0,Math.PI*2);ctx.stroke();}
+    });
+
+    // Yosunlar — sallanan
+    [W*.05,W*.17,W*.31,W*.46,W*.60,W*.73,W*.87].forEach((sx,si)=>{
+      const h2=52+si%3*20,sw=Math.sin(now*0.0013+si*1.5)*15;
+      ctx.strokeStyle=`rgba(28,${118+si%3*22},55,0.88)`;ctx.lineWidth=4+si%2*2;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(sx,H*.97);ctx.bezierCurveTo(sx+sw*.3,H*.97-h2*.33,sx+sw*.7,H*.97-h2*.66,sx+sw,H*.97-h2);ctx.stroke();
+      ctx.strokeStyle=`rgba(48,${145+si%2*28},72,0.7)`;ctx.lineWidth=3;
+      ctx.beginPath();ctx.moveTo(sx+sw*.5,H*.97-h2*.5);ctx.quadraticCurveTo(sx+sw*.5+16,H*.97-h2*.5-8,sx+sw*.5+22,H*.97-h2*.5);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(sx+sw*.5,H*.97-h2*.5);ctx.quadraticCurveTo(sx+sw*.5-14,H*.97-h2*.5-7,sx+sw*.5-18,H*.97-h2*.5+2);ctx.stroke();
+    });
+
+    // Batık kütük
+    ctx.save();ctx.translate(W*.27,H*.91);ctx.rotate(-0.11);
+    ctx.fillStyle='rgba(65,42,18,0.87)';ctx.fillRect(-58,-9,116,18);
+    ctx.fillStyle='rgba(95,65,30,0.55)';ctx.fillRect(-58,-9,116,7);
+    ctx.restore();
+
+    // Sandık (sağ)
+    ctx.save();ctx.translate(W*.88,H*.86);ctx.rotate(0.16);
+    ctx.fillStyle='rgba(78,52,22,0.92)';ctx.fillRect(-18,-17,36,34);
+    ctx.strokeStyle='rgba(135,105,48,0.82)';ctx.lineWidth=2;ctx.strokeRect(-18,-17,36,34);
+    ctx.strokeStyle='rgba(135,105,48,0.6)';ctx.beginPath();ctx.moveTo(-18,0);ctx.lineTo(18,0);ctx.stroke();
+    ctx.fillStyle='rgba(175,138,58,0.75)';ctx.beginPath();ctx.arc(0,0,4,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+
+    // Işık huzmesi
+    [[W*.28,14],[W*.5,6],[W*.67,11],[W*.18,8]].forEach(([bx,off],i)=>{
+      const pulse=0.07+Math.sin(now*0.0009+i*1.8)*0.04;
+      const lg=ctx.createLinearGradient(bx,0,bx+55,H*.76);
+      lg.addColorStop(0,`rgba(115,215,195,${pulse+0.07})`);
+      lg.addColorStop(0.65,`rgba(75,175,155,${pulse})`);
+      lg.addColorStop(1,'rgba(0,115,95,0)');
+      ctx.fillStyle=lg;ctx.beginPath();
+      ctx.moveTo(bx-off,0);ctx.lineTo(bx+off+38,0);ctx.lineTo(bx+88,H*.79);ctx.lineTo(bx-12,H*.79);
+      ctx.closePath();ctx.fill();
+    });
+
+    // Baloncuklar (yukarı yüzen)
+    for(let i=0;i<6;i++){
+      const bx=W*(0.2+i*0.12),by=H*(0.35+Math.sin(now*0.001+i)*0.25);
+      const br=3+i%3*2;
+      ctx.strokeStyle='rgba(195,238,252,0.75)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(bx,by,br,0,Math.PI*2);ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,0.15)';ctx.beginPath();ctx.arc(bx-br*.3,by-br*.3,br*.4,0,Math.PI*2);ctx.fill();
+    }
+
+    // Balıklar
+    underwaterFish.forEach((f,i)=>{
+      f.wag+=f.wagSpd;
+      const fx=((f.ox*0.3+W*.35+Math.sin(now*0.0005+i*2.1)*W*.38))%W;
+      const fy=H*.12+Math.abs(f.oy%(H*.55))+Math.sin(now*0.0008+i*1.7)*25;
+      const dir=Math.sin(now*0.0003+i)>=0?1:-1;
+      ctx.save();ctx.translate(fx,fy);ctx.scale(dir,1);ctx.globalAlpha=0.78;
+      ctx.fillStyle=f.col;ctx.beginPath();ctx.ellipse(0,0,f.size,f.size*.42,0,0,Math.PI*2);ctx.fill();
+      const wag2=Math.sin(f.wag)*.5;
+      ctx.beginPath();ctx.moveTo(-f.size*.7,0);ctx.lineTo(-f.size*1.4,f.size*.5+wag2*7);ctx.lineTo(-f.size*1.4,-f.size*.5+wag2*7);ctx.closePath();ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,0.65)';ctx.beginPath();ctx.arc(f.size*.5,-f.size*.1,f.size*.13,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.55)';ctx.beginPath();ctx.arc(f.size*.52,-f.size*.12,f.size*.05,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.22)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-f.size*.3,-f.size*.1);ctx.lineTo(f.size*.4,-f.size*.1);ctx.stroke();
+      ctx.restore();
+    });
+    ctx.globalAlpha=1;
+
+    // Vinyet kenar karartma
+    const uwVig=ctx.createRadialGradient(W/2,H/2,H*.28,W/2,H/2,H*.88);
+    uwVig.addColorStop(0,'rgba(0,0,0,0)');uwVig.addColorStop(1,'rgba(0,18,28,0.72)');
+    ctx.fillStyle=uwVig;ctx.fillRect(0,0,W,H);
+
+    // DAL butonu ipucu
+    ctx.fillStyle='rgba(180,240,255,0.72)';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🤿 SU ALTINDASIN  •  DAL butonuna tekrar bas çıkmak için',W/2,H-20);
+  }
+
+  // ── MAĞARA OVERLAY (mağara içindeyken) ───────────────────
+  if(inCave&&!isSubmerged){
+    const now=Date.now();
+    // Koyu mağara kaplama — neredeyse tam ekran karanlık
+    ctx.fillStyle='rgba(5,12,8,0.82)';ctx.fillRect(0,0,W,H);
+
+    // Mağara duvarları — sarkıtlar yukarıda
+    ctx.fillStyle='rgba(18,28,20,0.95)';
+    [[0,0,W*.18,H],[W*.82,0,W*.18,H]].forEach(([x,y,w,h])=>ctx.fillRect(x,y,w,h));
+    // Sarkıtlar (stalactite)
+    ctx.fillStyle='#1a2818';
+    [W*.04,W*.10,W*.16,W*.25,W*.35,W*.50,W*.62,W*.72,W*.80,W*.88,W*.94].forEach((sx,i)=>{
+      const sh=35+i%4*22;
+      ctx.beginPath();ctx.moveTo(sx-12,0);ctx.lineTo(sx+12,0);ctx.lineTo(sx+(i%2?5:-5),sh);ctx.closePath();ctx.fill();
+    });
+
+    // Yerdeki büyük kayalar
+    ctx.fillStyle='rgba(30,42,28,0.85)';
+    [[W*.05,H*.88,55,22],[W*.18,H*.92,38,16],[W*.78,H*.89,48,20],[W*.91,H*.93,32,14]].forEach(([x,y,rw,rh])=>{
+      ctx.beginPath();ctx.ellipse(x,y,rw,rh,0,0,Math.PI*2);ctx.fill();
+    });
+
+    // Parlayan kristaller (mavi/yeşil)
+    const crystals=[
+      {x:W*.13,y:H*.38,col:'#40d0ff',glow:'rgba(0,180,255,0.35)',h:55},
+      {x:W*.22,y:H*.55,col:'#30ff80',glow:'rgba(0,220,80,0.3)',h:40},
+      {x:W*.78,y:H*.42,col:'#60e0ff',glow:'rgba(30,200,255,0.32)',h:48},
+      {x:W*.87,y:H*.60,col:'#50ff70',glow:'rgba(20,240,80,0.28)',h:38},
+      {x:W*.42,y:H*.22,col:'#80d0ff',glow:'rgba(60,180,255,0.25)',h:32},
+      {x:W*.65,y:H*.30,col:'#40ffaa',glow:'rgba(20,220,120,0.28)',h:44},
+    ];
+    crystals.forEach(cr=>{
+      const pulse=0.7+Math.sin(now*0.0012+cr.x)*0.3;
+      // Parıltı
+      ctx.save();ctx.globalAlpha=pulse*.6;
+      ctx.shadowColor=cr.col;ctx.shadowBlur=28;
+      ctx.fillStyle=cr.glow.replace('0.','0.');
+      ctx.beginPath();ctx.ellipse(cr.x,cr.y,cr.h*.55,cr.h*.55,0,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+      // Kristal şekli (üçgen prizma)
+      ctx.save();ctx.globalAlpha=pulse*.9;
+      ctx.fillStyle=cr.col+'99';
+      ctx.beginPath();ctx.moveTo(cr.x,cr.y-cr.h);ctx.lineTo(cr.x-cr.h*.25,cr.y);ctx.lineTo(cr.x+cr.h*.25,cr.y);ctx.closePath();ctx.fill();
+      ctx.fillStyle=cr.col+'cc';
+      ctx.beginPath();ctx.moveTo(cr.x,cr.y-cr.h);ctx.lineTo(cr.x,cr.y);ctx.lineTo(cr.x+cr.h*.25,cr.y);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=cr.col;ctx.lineWidth=1.5;ctx.globalAlpha=pulse;
+      ctx.beginPath();ctx.moveTo(cr.x,cr.y-cr.h);ctx.lineTo(cr.x-cr.h*.25,cr.y);ctx.lineTo(cr.x+cr.h*.25,cr.y);ctx.closePath();ctx.stroke();
+      ctx.restore();
+    });
+
+    // Parlayan mantarlar
+    const shrooms=[
+      {x:W*.08,y:H*.75,col:'#ff4040',r:11},{x:W*.15,y:H*.80,col:'#ff8020',r:8},
+      {x:W*.74,y:H*.76,col:'#40c0ff',r:10},{x:W*.84,y:H*.72,col:'#80ff40',r:9},
+      {x:W*.50,y:H*.82,col:'#ff40a0',r:7},{x:W*.38,y:H*.78,col:'#ffcc00',r:9},
+    ];
+    shrooms.forEach(sh=>{
+      const pulse=0.65+Math.sin(now*0.0018+sh.x)*0.35;
+      ctx.save();ctx.globalAlpha=pulse;
+      ctx.shadowColor=sh.col;ctx.shadowBlur=18;
+      // Sap
+      ctx.fillStyle='rgba(160,130,80,0.8)';ctx.fillRect(sh.x-3,sh.y,6,sh.r*.9);
+      // Şapka
+      ctx.fillStyle=sh.col+'aa';ctx.beginPath();ctx.ellipse(sh.x,sh.y,sh.r,sh.r*.55,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=sh.col;ctx.beginPath();ctx.ellipse(sh.x-sh.r*.2,sh.y-sh.r*.15,sh.r*.3,sh.r*.2,0,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    });
+
+    // Yeşil parlayan lekeler (biyolüminesans)
+    for(let i=0;i<8;i++){
+      const gx=W*(0.1+i*0.11),gy=H*(0.5+Math.sin(i*1.3)*0.18);
+      const gp=0.3+Math.sin(now*0.0015+i)*0.2;
+      ctx.save();ctx.globalAlpha=gp;ctx.shadowColor='#40ff80';ctx.shadowBlur=22;
+      ctx.fillStyle='rgba(30,200,80,0.5)';ctx.beginPath();ctx.ellipse(gx,gy,9,6,0,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+
+    // Nehir/su (tabanda parlayan teal şerit)
+    const riverG=ctx.createLinearGradient(0,H*.84,0,H*.94);
+    riverG.addColorStop(0,'rgba(0,180,160,0.0)');
+    riverG.addColorStop(0.3,'rgba(0,160,140,0.55)');
+    riverG.addColorStop(1,'rgba(0,120,100,0.7)');
+    ctx.fillStyle=riverG;
+    ctx.beginPath();
+    ctx.moveTo(W*.1,H*.84);
+    for(let x=W*.1;x<=W*.9;x+=15){ctx.lineTo(x,H*.84+Math.sin(x*.025+now*.002)*6);}
+    ctx.lineTo(W*.9,H*.94);ctx.lineTo(W*.1,H*.94);ctx.closePath();ctx.fill();
+    // Su yansıma
+    ctx.strokeStyle='rgba(100,240,210,0.2)';ctx.lineWidth=2;
+    ctx.beginPath();for(let x=W*.1;x<=W*.9;x+=15){const wx=H*.86+Math.sin(x*.02+now*.0018)*5;x===W*.1?ctx.moveTo(x,wx):ctx.lineTo(x,wx);}ctx.stroke();
+
+    // Vinyet — mağara kıyıları çok koyu
+    const cavVig=ctx.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.9);
+    cavVig.addColorStop(0,'rgba(0,0,0,0)');cavVig.addColorStop(0.6,'rgba(0,0,0,0.15)');cavVig.addColorStop(1,'rgba(0,5,3,0.88)');
+    ctx.fillStyle=cavVig;ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle='rgba(80,255,160,0.6)';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('🔮 MAĞARA İÇİNDESİN',W/2,H-20);
+  }
 }
 
 function renderMM(){
