@@ -4799,8 +4799,8 @@ function render3D(){
   // Oyuncu pozisyonu güncelle
   if(player&&player.alive&&t3.playerMesh){
     const p=w2t(player.x,player.y);
-    t3.playerMesh.position.set(p.x,0,p.z);
-    t3.playerMesh.rotation.y=-player.angle-Math.PI/2;
+    t3.playerMesh.position.set(p.x,0.02,p.z);
+    t3.playerMesh.rotation.y=-(player.angle+Math.PI/2);
   }
 
   // Bot pozisyonları güncelle
@@ -4808,7 +4808,7 @@ function render3D(){
     const m=t3.botMeshes[b.id];
     if(!m)return;
     const p=w2t(b.x,b.y);
-    m.position.set(p.x,0,p.z);
+    m.position.set(p.x,0.02,p.z);
     m.rotation.y=-b.angle-Math.PI/2;
     m.visible=b.alive;
     // HP göstergesi rengi
@@ -4931,9 +4931,9 @@ function render3D(){
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
     if(camMode==='iso'){
-      // Zooba izometrik — yukarıdan 45 derece
-      three.cam.position.set(p.x, 18, p.z+22);
-      three.cam.lookAt(p.x, 1.5, p.z);
+      // Zooba izometrik — karakterin üstünden çapraz
+      three.cam.position.set(p.x, 14, p.z+12);
+      three.cam.lookAt(p.x, 0, p.z-3);
     } else if(camMode==='top'){
       // Tam üstten
       three.cam.position.set(p.x, 30, p.z+0.1);
