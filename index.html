@@ -16,14 +16,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a;font-family:
 #lobbyTitle{font-size:44px;font-weight:900;color:#f0c040;letter-spacing:4px;text-shadow:0 0 30px #f08000;margin:8px 0 2px;}
 #lobbySub{color:#c8902a;font-size:13px;margin-bottom:12px;}
 .slabel{color:#f0c040;font-size:11px;font-weight:700;letter-spacing:2px;margin:10px 0 5px;text-transform:uppercase;}
-.cgrid{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;max-width:560px;padding:0 10px;}
-.cc{width:88px;height:118px;background:linear-gradient(180deg,#1a1030 0%,#0e0820 100%);border:2px solid #3a2060;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;cursor:pointer;transition:all 0.15s;position:relative;overflow:hidden;padding-top:6px;}
-.cc:active,.cc.sel{border-color:#f0c040;background:linear-gradient(180deg,#2a1a50 0%,#1a0a30 100%);box-shadow:0 0 14px rgba(240,192,64,0.4);}
-.cc canvas{width:52px;height:52px;}
-.cc .nm{font-size:10px;color:#fff;font-weight:700;margin-top:3px;text-align:center;line-height:1.2;}
-.cc .ctitle{font-size:7.5px;color:#9080c0;text-align:center;margin-top:1px;line-height:1.2;padding:0 4px;}
-.cc .ctrophy{font-size:8px;color:#f0c040;margin-top:3px;font-weight:700;}
-.cc .clvlbar{width:68px;height:4px;background:#2a1a40;border-radius:2px;margin-top:3px;overflow:hidden;}
+.cgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;max-width:420px;padding:0 8px;}
+.cc{width:100%;height:110px;background:linear-gradient(180deg,#1a1030 0%,#0e0820 100%);border:2px solid #3a2060;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;cursor:pointer;transition:all 0.15s;position:relative;overflow:hidden;padding-top:5px;}
+.cc:active,.cc.sel{border-color:#f0c040;background:linear-gradient(180deg,#2a1a50 0%,#1a0a30 100%);box-shadow:0 0 12px rgba(240,192,64,0.4);}
+.cc canvas{width:46px;height:46px;}
+.cc .nm{font-size:9px;color:#fff;font-weight:700;margin-top:2px;text-align:center;line-height:1.2;}
+.cc .ctitle{font-size:6.5px;color:#9080c0;text-align:center;margin-top:1px;line-height:1.2;padding:0 3px;}
+.cc .ctrophy{font-size:7.5px;color:#f0c040;margin-top:2px;font-weight:700;}
+.cc .clvlbar{width:60px;height:3px;background:#2a1a40;border-radius:2px;margin-top:2px;overflow:hidden;}
 .cc .clvlfill{height:100%;border-radius:2px;background:linear-gradient(90deg,#a060ff,#60c0ff);}
 .mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;max-width:520px;padding:0 10px;}
 .mc{background:#1a0a00;border:2px solid #3a1a00;border-radius:10px;padding:9px;cursor:pointer;text-align:center;transition:all 0.15s;}
@@ -1466,19 +1466,21 @@ function update(dt){
     const newY=Math.max(10,Math.min(MAP-10,player.y+ny*player.spd*dt*2.2));
     // ağaç çarpışması (1. şahıs ve üstten)
     let blocked=false;
-    if(camMode==='first'||camMode==='top'){
-      for(const t of mapObjects.trees){
-        const dx=newX-t.x,dy=newY-t.y;
-        if(Math.sqrt(dx*dx+dy*dy)<t.r*0.7){
-          blocked=true;
-          // ağaca tırmanma — yakınında uzun bas
-          if(camMode==='first'){
-            if(!climbedTree){climbedTree=t;climbHeight=0;}
-            climbHeight=Math.min(1,climbHeight+0.02*dt);
-          }
-          break;
+    for(const t of mapObjects.trees){
+      const dx=newX-t.x,dy=newY-t.y;
+      if(Math.sqrt(dx*dx+dy*dy)<t.r*0.7){
+        blocked=true;
+        if(camMode==='first'){
+          if(!climbedTree){climbedTree=t;climbHeight=0;}
+          climbHeight=Math.min(1,climbHeight+0.02*dt);
         }
+        break;
       }
+    }
+    for(const r of mapObjects.rocks){
+      if(r.isWater)continue;
+      const dx=newX-r.x,dy=newY-r.y;
+      if(Math.sqrt(dx*dx+dy*dy)<Math.max(r.w,r.h)*0.38){blocked=true;break;}
     }
     if(!blocked){
       player.x=newX; player.y=newY;
