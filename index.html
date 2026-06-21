@@ -1462,30 +1462,39 @@ function update(dt){
   if(joyActive&&(joyDelta.x||joyDelta.y)){
     const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
     const nx=joyDelta.x/len,ny=joyDelta.y/len;
-    const newX=Math.max(10,Math.min(MAP-10,player.x+nx*player.spd*dt*2.2));
-    const newY=Math.max(10,Math.min(MAP-10,player.y+ny*player.spd*dt*2.2));
-    // ağaç çarpışması (1. şahıs ve üstten)
-    let blocked=false;
-    for(const t of mapObjects.trees){
-      const dx=newX-t.x,dy=newY-t.y;
-      if(Math.sqrt(dx*dx+dy*dy)<t.r*0.7){
-        blocked=true;
-        if(camMode==='first'){
-          if(!climbedTree){climbedTree=t;climbHeight=0;}
-          climbHeight=Math.min(1,climbHeight+0.02*dt);
-        }
-        break;
+    const spd=player.spd*dt*2.2;
+    let newX=Math.max(10,Math.min(MAP-10,player.x+nx*spd));
+    let newY=Math.max(10,Math.min(MAP-10,player.y+ny*spd));
+    // X ve Y ayrı ayrı kontrol — köşelere takılmasın
+    function collidesTree(px,py){
+      for(const t of mapObjects.trees){
+        if(Math.hypot(px-t.x,py-t.y)<t.r*0.85){return t;}
       }
+      return null;
     }
-    for(const r of mapObjects.rocks){
-      if(r.isWater)continue;
-      const dx=newX-r.x,dy=newY-r.y;
-      if(Math.sqrt(dx*dx+dy*dy)<Math.max(r.w,r.h)*0.38){blocked=true;break;}
+    function collidesRock(px,py){
+      for(const r of mapObjects.rocks){
+        if(r.isWater)continue;
+        if(Math.hypot(px-r.x,py-r.y)<Math.max(r.w,r.h)*0.45){return true;}
+      }
+      return false;
     }
-    if(!blocked){
-      player.x=newX; player.y=newY;
-      if(climbedTree){climbHeight=Math.max(0,climbHeight-0.05*dt);if(climbHeight<=0)climbedTree=null;}
+    // X eksenini dene
+    let hitT=collidesTree(newX,player.y);
+    let hitR=collidesRock(newX,player.y);
+    if(hitT||hitR){newX=player.x;}
+    // Y eksenini dene
+    hitT=collidesTree(newX,newY);
+    hitR=collidesRock(newX,newY);
+    if(hitT||hitR){newY=player.y;}
+    // Ağaca tırmanma kontrolü
+    const nearTree=collidesTree(newX,newY)||collidesTree(player.x,player.y);
+    if(nearTree&&camMode==='first'){
+      if(!climbedTree){climbedTree=nearTree;climbHeight=0;}
+      climbHeight=Math.min(1,climbHeight+0.02*dt);
     }
+    player.x=newX; player.y=newY;
+    if(climbedTree&&!nearTree){climbHeight=Math.max(0,climbHeight-0.05*dt);if(climbHeight<=0)climbedTree=null;}
     if(camMode!=='first') player.angle=Math.atan2(ny,nx);
     // yürüyüş fazı: hareket hızına göre adım ritmi
     player.walkPhase=(player.walkPhase||0)+(player.spd*0.018*dt);
