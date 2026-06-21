@@ -1539,9 +1539,8 @@ function update(dt){
     return; // Paraşütteyken savaş yok
   }
 
-  // ── SU KONTROLÜ (timsah/köpekbalığı) ── boyut içinde atla
+  // ── BOYUT İÇİ HAREKET + PORTAL TESPİTİ ──────────────────
   if(dimension!=='surface'){
-    // Boyut içinde sadece hareket, çıkış portalı tespiti üstte yapıldı
     if(joyActive&&(joyDelta.x||joyDelta.y)){
       const len2=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
       const nx2=joyDelta.x/len2,ny2=joyDelta.y/len2;
@@ -1551,8 +1550,16 @@ function update(dt){
       player.angle=Math.atan2(ny2,nx2);
       player.walkPhase=(player.walkPhase||0)+dt*.18;
     }
-    player._cvs=null; // sprite yenile
-    return; // update'in geri kalanını atla
+    // Çıkış portalı tespiti
+    const portals=(dimension==='cave'?caveMap:uwMap).portals||[];
+    for(const p of portals){
+      if(Math.hypot(player.x-p.x,player.y-p.y)<p.r){exitDimension();break;}
+    }
+    // Çıkış butonu göster
+    const dalBtn2=document.getElementById('dalBtn');
+    if(dalBtn2&&dimension!=='surface'){dalBtn2.style.display='block';dalBtn2.innerHTML=(dimension==='cave'?'🪨<br>ÇIKIŞ':'🤿<br>ÇIKIŞ');}
+    player._cvs=null;
+    return;
   }
   inWater=false;
   if(curMap==='river'&&mapObjects.rivers){
@@ -1603,15 +1610,6 @@ function update(dt){
       if(Math.hypot(player.x-c.x,player.y-c.y)<c.r*0.82){inCave=true;break;}
     }
     if(inCave&&!wasInCave) enterDimension('cave');
-  } else if(dimension==='cave'||dimension==='underwater'){
-    // Boyut içinde portal tespiti — çıkış için
-    const portals=(dimension==='cave'?caveMap:uwMap).portals||[];
-    for(const p of portals){
-      if(Math.hypot(player.x-p.x,player.y-p.y)<p.r){exitDimension();break;}
-    }
-    // Çıkış butonu göster
-    const dalBtn2=document.getElementById('dalBtn');
-    if(dalBtn2){dalBtn2.style.display='block';dalBtn2.innerHTML=(dimension==='cave'?'🪨<br>ÇIKIŞ':'🤿<br>ÇIKIŞ');}
   }
   if(joyActive&&(joyDelta.x||joyDelta.y)){
     const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
