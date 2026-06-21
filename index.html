@@ -285,11 +285,17 @@ let superCd=0, superMax=300;
 let aliveN=30, kills=0;
 let safeZone={x:MAP/2, y:MAP/2, r:MAP*0.47};
 let parachute={active:false, x:0, y:0, targetX:0, targetY:0, alt:1}; // paraşüt inişi
-let inWater=false; // suda mı
-let isSubmerged=false; // su altında mı (timsah/köpekbalığı dalıyor)
-let underwaterFish=[]; // su altı balıkları
-let inCave=false; // mağarada mı
-let prevCamMode='iso'; // dalma öncesi kamera modu
+let inWater=false;
+let isSubmerged=false;
+let underwaterFish=[];
+let inCave=false;
+let prevCamMode='iso';
+// ── BOYUT SİSTEMİ ────────────────────────────────────────
+let dimension='surface'; // 'surface' | 'cave' | 'underwater'
+let dimEntryX=0, dimEntryY=0; // giriş noktası (çıkışta geri dön)
+let caveMap={trees:[],rocks:[],bushes:[],logs:[],rivers:[],crystals:[],shrooms:[]};
+let uwMap={fish:[],seaweeds:[],stones:[],chests:[],logs:[]};
+let cavePal={g1:'#12200e',g2:'#1a2c14',g3:'#0c1808',tree:'#1a3010',tree2:'#243818',rock:'#3a3228'};
 let szTimer=600;
 let gState='lobby';
 let rafId=null, lastT=0;
@@ -1480,8 +1486,8 @@ function startGame(mode){
   const c=selChar;
   player={x:MAP/2+Math.random()*400-200,y:MAP/2+Math.random()*400-200,char:c,hp:c.hp||110,maxHp:c.hp||110,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0};
   spawnBots(29);
-  aliveN=30;kills=0;superCd=0;isSubmerged=false;inCave=false;
-  initFish();
+  aliveN=30;kills=0;superCd=0;isSubmerged=false;inCave=false;dimension='surface';
+  initFish();genCaveMap();genUwMap();
   safeZone={x:MAP/2,y:MAP/2,r:MAP*0.47};szTimer=700;
   // Paraşütle iniş başlat
   parachute={active:true,x:MAP/2,y:MAP/2,targetX:player.x,targetY:player.y,alt:1};
@@ -1533,7 +1539,21 @@ function update(dt){
     return; // Paraşütteyken savaş yok
   }
 
-  // ── SU KONTROLÜ (timsah/köpekbalığı) ──
+  // ── SU KONTROLÜ (timsah/köpekbalığı) ── boyut içinde atla
+  if(dimension!=='surface'){
+    // Boyut içinde sadece hareket, çıkış portalı tespiti üstte yapıldı
+    if(joyActive&&(joyDelta.x||joyDelta.y)){
+      const len2=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
+      const nx2=joyDelta.x/len2,ny2=joyDelta.y/len2;
+      const spd2=player.spd*dt*2.8;
+      player.x=Math.max(10,Math.min(MAP-10,player.x+nx2*spd2));
+      player.y=Math.max(10,Math.min(MAP-10,player.y+ny2*spd2));
+      player.angle=Math.atan2(ny2,nx2);
+      player.walkPhase=(player.walkPhase||0)+dt*.18;
+    }
+    player._cvs=null; // sprite yenile
+    return; // update'in geri kalanını atla
+  }
   inWater=false;
   if(curMap==='river'&&mapObjects.rivers){
     for(const r of mapObjects.rivers){
@@ -1574,21 +1594,24 @@ function update(dt){
       }
     }
   }
-  // ── MAĞARA TESPİTİ ───────────────────────────────────────
-  const wasInCave=inCave;
-  inCave=false;
-  for(const c of mapObjects.caves){
-    if(c.isBuilding)continue;
-    if(Math.hypot(player.x-c.x,player.y-c.y)<c.r*0.82){inCave=true;break;}
-  }
-  // Mağaraya ilk girince first-person'a geç, çıkınca geri dön
-  if(inCave&&!wasInCave&&!isSubmerged){
-    prevCamMode=camMode;
-    camMode='first';
-    document.getElementById('camBtn').textContent='📷 1. Şahıs';
-  } else if(!inCave&&wasInCave&&!isSubmerged){
-    camMode=prevCamMode;
-    document.getElementById('camBtn').textContent='📷 '+(camMode==='iso'?'Zooba':camMode==='top'?'Üstten':camMode==='third'?'3. Şahıs':'1. Şahıs');
+  // ── BOYUT / MAĞARA TESPİTİ ───────────────────────────────
+  if(dimension==='surface'){
+    const wasInCave=inCave;
+    inCave=false;
+    for(const c of mapObjects.caves){
+      if(c.isBuilding)continue;
+      if(Math.hypot(player.x-c.x,player.y-c.y)<c.r*0.82){inCave=true;break;}
+    }
+    if(inCave&&!wasInCave) enterDimension('cave');
+  } else if(dimension==='cave'||dimension==='underwater'){
+    // Boyut içinde portal tespiti — çıkış için
+    const portals=(dimension==='cave'?caveMap:uwMap).portals||[];
+    for(const p of portals){
+      if(Math.hypot(player.x-p.x,player.y-p.y)<p.r){exitDimension();break;}
+    }
+    // Çıkış butonu göster
+    const dalBtn2=document.getElementById('dalBtn');
+    if(dalBtn2){dalBtn2.style.display='block';dalBtn2.innerHTML=(dimension==='cave'?'🪨<br>ÇIKIŞ':'🤿<br>ÇIKIŞ');}
   }
   if(joyActive&&(joyDelta.x||joyDelta.y)){
     const len=Math.sqrt(joyDelta.x**2+joyDelta.y**2);
@@ -1746,20 +1769,76 @@ function addKF(msg){
   const f=document.getElementById('kfeed');const el=document.createElement('div');el.className='km';el.textContent=msg;f.appendChild(el);setTimeout(()=>el.remove(),3000);
 }
 
+// ── MAĞARA HARİTASI OLUŞTUR ──────────────────────────────
+function genCaveMap(){
+  const R=()=>Math.random();
+  const M=MAP;
+  caveMap.trees=[];caveMap.rocks=[];caveMap.crystals=[];caveMap.shrooms=[];caveMap.rivers=[];caveMap.logs=[];caveMap.portals=[];
+  // Yeraltı nehiri — kıvrımlı
+  const rp=[];let rx=M*.1,ry=M*.5;
+  for(let i=0;i<14;i++){rx+=M*.06+(R()-.5)*M*.08;ry+=(R()-.5)*M*.12;rp.push({x:Math.min(M*.95,Math.max(M*.05,rx)),y:Math.min(M*.9,Math.max(M*.1,ry))});}
+  caveMap.rivers.push({pts:rp,w:90,isGlow:true});
+  // İkinci kol
+  const rp2=[];let rx2=M*.05,ry2=M*.2;
+  for(let i=0;i<10;i++){rx2+=M*.07+(R()-.5)*M*.06;ry2+=(R()-.5)*M*.1;rp2.push({x:Math.min(M*.95,Math.max(M*.05,rx2)),y:Math.min(M*.9,Math.max(M*.1,ry2))});}
+  caveMap.rivers.push({pts:rp2,w:55,isGlow:true});
+  // Kristaller
+  for(let i=0;i<60;i++) caveMap.crystals.push({x:R()*M,y:R()*M,col:['#40d0ff','#30ff80','#ff60a0','#a060ff','#40ffcc'][Math.floor(R()*5)],h:30+R()*60,phase:R()*Math.PI*2});
+  // Mantarlar
+  for(let i=0;i<80;i++) caveMap.shrooms.push({x:R()*M,y:R()*M,col:['#ff4040','#ff8020','#40c0ff','#80ff40','#ff40a0','#ffcc00'][Math.floor(R()*6)],r:8+R()*16,phase:R()*Math.PI*2});
+  // Taşlar
+  for(let i=0;i<200;i++) caveMap.rocks.push({x:R()*M,y:R()*M,w:20+R()*50,h:14+R()*36,a:R()*Math.PI*2});
+  // Kütükler
+  for(let i=0;i<60;i++) caveMap.logs.push({x:R()*M,y:R()*M,w:50+R()*80,a:R()*Math.PI});
+  // Çıkış portalleri (yüzeye çıkmak için)
+  for(let i=0;i<6;i++) caveMap.portals.push({x:M*(.1+i*.15+R()*.05),y:M*(.2+R()*.6),r:60,type:'exit'});
+}
+
+// ── SU ALTI HARİTASI OLUŞTUR ─────────────────────────────
+function genUwMap(){
+  const R=()=>Math.random();
+  const M=MAP;
+  uwMap.fish=[];uwMap.seaweeds=[];uwMap.stones=[];uwMap.chests=[];uwMap.logs=[];uwMap.bubbles=[];uwMap.portals=[];
+  // Balıklar
+  for(let i=0;i<40;i++) uwMap.fish.push({x:R()*M,y:R()*M,col:['#a0c8e0','#c0b080','#e08060','#80b0a0','#f0a060','#80c0ff'][Math.floor(R()*6)],size:8+R()*14,vx:(R()-.5)*1.6,vy:(R()-.5)*.5,wag:R()*Math.PI*2,wagSpd:.05+R()*.04});
+  // Yosunlar
+  for(let i=0;i<120;i++) uwMap.seaweeds.push({x:R()*M,y:R()*M,h:40+R()*80,phase:R()*Math.PI*2,col:`rgb(${20+Math.floor(R()*30)},${100+Math.floor(R()*80)},${40+Math.floor(R()*30)})`});
+  // Taşlar
+  for(let i=0;i<300;i++) uwMap.stones.push({x:R()*M,y:R()*M,r:8+R()*28,col:`rgb(${60+Math.floor(R()*40)},${55+Math.floor(R()*35)},${40+Math.floor(R()*30)})`});
+  // Sandıklar (eşya içeriyor)
+  for(let i=0;i<8;i++) uwMap.chests.push({x:R()*M,y:R()*M,opened:false,r:45});
+  // Batık kütükler
+  for(let i=0;i<30;i++) uwMap.logs.push({x:R()*M,y:R()*M,w:60+R()*100,a:R()*Math.PI});
+  // Yüzeye çıkış portalleri (su yüzeyine çıkmak)
+  for(let i=0;i<8;i++) uwMap.portals.push({x:M*(.05+i*.12+R()*.05),y:M*(.1+R()*.2),r:55,type:'exit'});
+}
+
+// ── BOYUT GEÇİŞİ ─────────────────────────────────────────
+function enterDimension(dim){
+  dimEntryX=player.x; dimEntryY=player.y;
+  dimension=dim;
+  // Ortaya koy
+  player.x=MAP/2+(Math.random()-.5)*400;
+  player.y=MAP/2+(Math.random()-.5)*400;
+  prevCamMode=camMode;
+  camMode='first';
+  document.getElementById('camBtn').textContent='📷 1. Şahıs';
+  // Geçiş parçacıkları
+  const col=dim==='cave'?'rgba(80,255,120,0.9)':'rgba(60,200,255,0.9)';
+  for(let i=0;i<20;i++) particles.push({x:dimEntryX+(Math.random()-.5)*40,y:dimEntryY+(Math.random()-.5)*30,vx:(Math.random()-.5)*5,vy:-Math.random()*4-1,life:35,col,r:5+Math.random()*5});
+}
+
+function exitDimension(){
+  dimension='surface';
+  player.x=dimEntryX; player.y=dimEntryY;
+  camMode=prevCamMode;
+  document.getElementById('camBtn').textContent='📷 '+(camMode==='iso'?'Zooba':camMode==='top'?'Üstten':camMode==='third'?'3. Şahıs':'1. Şahıs');
+  for(let i=0;i<16;i++) particles.push({x:player.x+(Math.random()-.5)*40,y:player.y+(Math.random()-.5)*30,vx:(Math.random()-.5)*4,vy:-Math.random()*3,life:30,col:'rgba(255,220,80,0.9)',r:4+Math.random()*5});
+}
+
 function doDive(){
-  if(!inWater)return;
-  if(!isSubmerged){
-    // Dalmaya başla — birinci şahısa geç
-    prevCamMode=camMode;
-    camMode='first';
-    document.getElementById('camBtn').textContent='📷 1. Şahıs';
-    isSubmerged=true;
-  } else {
-    // Yüzeye çık — önceki kameraya dön
-    isSubmerged=false;
-    camMode=prevCamMode;
-    document.getElementById('camBtn').textContent='📷 '+(camMode==='iso'?'Zooba':camMode==='top'?'Üstten':camMode==='third'?'3. Şahıs':'1. Şahıs');
-  }
+  if(dimension==='underwater'){exitDimension();return;}
+  if(dimension==='surface'&&inWater){enterDimension('underwater');isSubmerged=true;}
   const btn=document.getElementById('dalBtn');
   if(btn) btn.style.display='none';
   for(let i=0;i<12;i++) particles.push({x:player.x+(Math.random()-0.5)*30,y:player.y+(Math.random()-0.5)*20,vx:(Math.random()-0.5)*4,vy:-Math.random()*4-1,life:25,col:'rgba(100,200,255,0.85)',r:4+Math.random()*4});
@@ -2014,6 +2093,8 @@ function render(){
   if(!ctx)return;
   const W=canvas.width,H=canvas.height;
   ctx.clearRect(0,0,W,H);
+  if(dimension==='cave'){renderCaveDim(W,H);renderMM();return;}
+  if(dimension==='underwater'){renderUwDim(W,H);renderMM();return;}
   if(camMode==='iso')renderIso(W,H);
   else if(camMode==='top')renderTop(W,H);
   else if(camMode==='third')renderThird(W,H);
@@ -2029,6 +2110,278 @@ function roundRect(c2d,x,y,w,h,r){
   c2d.lineTo(x+w,y+h-r);c2d.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c2d.lineTo(x+r,y+h);
   c2d.quadraticCurveTo(x,y+h,x,y+h-r);c2d.lineTo(x,y+r);c2d.quadraticCurveTo(x,y,x+r,y);c2d.closePath();
 }
+
+// ── MAĞARA BOYUTU RENDERER ───────────────────────────────
+function renderCaveDim(W,H){
+  const now=Date.now();
+  // Kamera — oyuncuyu ortada tut
+  const cx=player.x-W/2, cy=player.y-H/2;
+  ctx.save(); ctx.translate(-cx,-cy);
+
+  // Zemin — koyu toprak
+  const grd=ctx.createLinearGradient(cx,cy,cx,cy+H);
+  grd.addColorStop(0,'#0c1808'); grd.addColorStop(1,'#101c0c');
+  ctx.fillStyle=grd; ctx.fillRect(cx,cy,W,H);
+  // Zemin doku noktaları
+  ctx.fillStyle='rgba(30,50,20,0.25)';
+  for(let i=0;i<80;i++){const gx=cx+Math.sin(i*137)*W,gy=cy+Math.cos(i*97)*H;ctx.beginPath();ctx.ellipse(gx,gy,18+i%8*3,10+i%5*2,i,0,Math.PI*2);ctx.fill();}
+
+  // Yeraltı nehiri — parlayan teal
+  caveMap.rivers.forEach(r=>{
+    if(r.pts.length<2)return;
+    // Dış parıltı
+    ctx.strokeStyle='rgba(0,200,160,0.18)'; ctx.lineWidth=r.w+28; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath(); r.pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+    // Su
+    ctx.strokeStyle='#1a8870'; ctx.lineWidth=r.w;
+    ctx.beginPath(); r.pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+    // Parlak merkez
+    ctx.strokeStyle=`rgba(60,220,180,${0.3+Math.sin(now*0.002)*0.1})`; ctx.lineWidth=r.w*0.35;
+    ctx.beginPath(); r.pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+    // Dalga animasyonu
+    ctx.strokeStyle='rgba(120,255,210,0.15)'; ctx.lineWidth=r.w*0.15;
+    ctx.beginPath(); r.pts.forEach((p,i)=>{const ip2=isoProjectDim(p.x,p.y,cx,cy,W,H);i===0?ctx.moveTo(p.x,p.y+Math.sin(now*0.002+p.x*0.005)*8):ctx.lineTo(p.x,p.y+Math.sin(now*0.002+p.x*0.005)*8);}); ctx.stroke();
+  });
+
+  // Taşlar
+  caveMap.rocks.forEach(r=>{
+    const dx=r.x-player.x, dy=r.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    ctx.fillStyle='#2e2820'; ctx.beginPath(); ctx.ellipse(r.x,r.y+r.h*0.22,r.w*.55,r.h*.28,r.a,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#3e3828'; ctx.beginPath(); ctx.ellipse(r.x,r.y,r.w*.5,r.h*.26,r.a,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.ellipse(r.x-r.w*.15,r.y-r.h*.1,r.w*.2,r.h*.12,r.a,0,Math.PI*2); ctx.fill();
+  });
+
+  // Kütükler
+  caveMap.logs.forEach(l=>{
+    const dx=l.x-player.x, dy=l.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    ctx.save(); ctx.translate(l.x,l.y); ctx.rotate(l.a);
+    ctx.fillStyle='#3a2210'; ctx.fillRect(-l.w/2,-7,l.w,14);
+    ctx.fillStyle='#4e3018'; ctx.fillRect(-l.w/2,-7,l.w,5);
+    ctx.restore();
+  });
+
+  // Mantarlar
+  caveMap.shrooms.forEach(s=>{
+    const dx=s.x-player.x, dy=s.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    const pulse=0.65+Math.sin(now*0.002+s.phase)*0.35;
+    ctx.save(); ctx.globalAlpha=pulse;
+    ctx.shadowColor=s.col; ctx.shadowBlur=16;
+    ctx.fillStyle='rgba(160,130,80,0.85)'; ctx.fillRect(s.x-3,s.y,6,s.r*.8);
+    ctx.fillStyle=s.col+'99'; ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*.5,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=s.col; ctx.beginPath(); ctx.ellipse(s.x-s.r*.2,s.y-s.r*.12,s.r*.28,s.r*.18,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+
+  // Kristaller
+  caveMap.crystals.forEach(c=>{
+    const dx=c.x-player.x, dy=c.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    const pulse=0.7+Math.sin(now*0.0015+c.phase)*0.3;
+    ctx.save(); ctx.globalAlpha=pulse;
+    ctx.shadowColor=c.col; ctx.shadowBlur=22;
+    ctx.fillStyle=c.col+'55'; ctx.beginPath(); ctx.ellipse(c.x,c.y,c.h*.45,c.h*.45,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=c.col+'88'; ctx.beginPath(); ctx.moveTo(c.x,c.y-c.h); ctx.lineTo(c.x-c.h*.22,c.y); ctx.lineTo(c.x+c.h*.22,c.y); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=c.col+'cc'; ctx.beginPath(); ctx.moveTo(c.x,c.y-c.h); ctx.lineTo(c.x,c.y); ctx.lineTo(c.x+c.h*.22,c.y); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=c.col; ctx.lineWidth=1.5; ctx.globalAlpha=pulse;
+    ctx.beginPath(); ctx.moveTo(c.x,c.y-c.h); ctx.lineTo(c.x-c.h*.22,c.y); ctx.lineTo(c.x+c.h*.22,c.y); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  });
+
+  // Çıkış portalleri (yüzeye çıkış)
+  caveMap.portals.forEach(p=>{
+    const pulse=0.6+Math.sin(now*0.003+p.x)*0.4;
+    ctx.save();
+    ctx.shadowColor='#ffe060'; ctx.shadowBlur=30; ctx.globalAlpha=pulse;
+    ctx.strokeStyle='#ffe060'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='rgba(255,220,80,0.18)'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='rgba(255,230,100,0.9)'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('☀️ ÇIKIŞ',p.x,p.y-p.r-8);
+  });
+
+  // Oyuncu
+  if(player.alive){
+    const sz=72;
+    ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(player.x+3,player.y+6,sz*.28,sz*.09,0,0,Math.PI*2); ctx.fill();
+    ctx.save(); ctx.translate(player.x,player.y); ctx.rotate(player.angle+Math.PI/2);
+    if(!player._cvs){player._cvs=document.createElement('canvas');player._cvs.width=sz;player._cvs.height=sz;drawCharSprite(player._cvs.getContext('2d'),player.char,sz);}
+    ctx.drawImage(player._cvs,-sz/2,-sz*.72); ctx.restore();
+    // İsim
+    ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(player.char.n,player.x,player.y-sz*.8);
+  }
+
+  // Partiküller
+  particles.forEach(pt=>{
+    ctx.fillStyle=pt.col; ctx.globalAlpha=Math.max(0,pt.life/30);
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.r||2.5,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  ctx.restore();
+
+  // Sarkıtlar — ekranın üst kenarında sabit (kamera ile birlikte)
+  ctx.fillStyle='#18200e';
+  [W*.04,W*.11,W*.18,W*.26,W*.34,W*.44,W*.54,W*.63,W*.71,W*.80,W*.88,W*.95].forEach((sx,i)=>{
+    const sh=28+i%4*18; ctx.beginPath(); ctx.moveTo(sx-10,0); ctx.lineTo(sx+10,0); ctx.lineTo(sx+(i%2?4:-4),sh); ctx.closePath(); ctx.fill();
+  });
+  // Kenar karartma vinyeti
+  const vg=ctx.createRadialGradient(W/2,H/2,H*.22,W/2,H/2,H*.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,5,3,0.82)');
+  ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  // HUD ipucu
+  ctx.fillStyle='rgba(100,255,160,0.75)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('🔮 MAĞARA BOYUTU  •  Sarı portala git → Yüzeye çık  •  ÇIKIŞ butonuna bas',W/2,H-18);
+}
+
+// ── SU ALTI BOYUTU RENDERER ──────────────────────────────
+function renderUwDim(W,H){
+  const now=Date.now();
+  const cx=player.x-W/2, cy=player.y-H/2;
+  ctx.save(); ctx.translate(-cx,-cy);
+
+  // Zemin — derin teal
+  const bgG=ctx.createLinearGradient(cx,cy,cx,cy+H);
+  bgG.addColorStop(0,'rgba(0,55,80,1)'); bgG.addColorStop(0.5,'rgba(0,75,100,1)'); bgG.addColorStop(1,'rgba(0,40,55,1)');
+  ctx.fillStyle=bgG; ctx.fillRect(cx,cy,W,H);
+
+  // Zemin kumu (haritanın her yerinde altta görünüm)
+  const sandG=ctx.createLinearGradient(cx,cy+H*.68,cx,cy+H);
+  sandG.addColorStop(0,'rgba(100,75,40,0)'); sandG.addColorStop(0.3,'rgba(108,80,42,0.78)'); sandG.addColorStop(1,'rgba(78,55,24,0.98)');
+  ctx.fillStyle=sandG; ctx.fillRect(cx,cy+H*.68,W,H*.32);
+
+  // Işık huzmesi (yukarıdan)
+  for(let i=0;i<5;i++){
+    const bx=cx+W*(0.15+i*.17), pulse=0.06+Math.sin(now*.0008+i*1.9)*.04;
+    const lg=ctx.createLinearGradient(bx,cy,bx+50,cy+H*.75);
+    lg.addColorStop(0,`rgba(100,220,190,${pulse+0.07})`); lg.addColorStop(0.7,`rgba(60,170,140,${pulse})`); lg.addColorStop(1,'rgba(0,100,80,0)');
+    ctx.fillStyle=lg; ctx.beginPath();
+    ctx.moveTo(bx-8,cy); ctx.lineTo(bx+45,cy); ctx.lineTo(bx+95,cy+H*.75); ctx.lineTo(bx-15,cy+H*.75); ctx.closePath(); ctx.fill();
+  }
+
+  // Kum taşları
+  uwMap.stones.forEach(s=>{
+    const dx=s.x-player.x, dy=s.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    ctx.fillStyle=s.col; ctx.beginPath(); ctx.ellipse(s.x,s.y,s.r,s.r*.55,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.ellipse(s.x-s.r*.25,s.y-s.r*.2,s.r*.35,s.r*.22,0,0,Math.PI*2); ctx.fill();
+  });
+
+  // Batık kütükler
+  uwMap.logs.forEach(l=>{
+    const dx=l.x-player.x, dy=l.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    ctx.save(); ctx.translate(l.x,l.y); ctx.rotate(l.a);
+    ctx.fillStyle='rgba(65,42,18,0.88)'; ctx.fillRect(-l.w/2,-8,l.w,16);
+    ctx.fillStyle='rgba(90,60,28,0.5)'; ctx.fillRect(-l.w/2,-8,l.w,6);
+    ctx.restore();
+  });
+
+  // Yosunlar
+  uwMap.seaweeds.forEach(s=>{
+    const dx=s.x-player.x, dy=s.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    const sw=Math.sin(now*.0014+s.phase)*16;
+    ctx.strokeStyle=s.col; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.bezierCurveTo(s.x+sw*.3,s.y-s.h*.33,s.x+sw*.7,s.y-s.h*.66,s.x+sw,s.y-s.h); ctx.stroke();
+    ctx.strokeStyle=s.col.replace('rgb','rgba').replace(')',',0.6)'); ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(s.x+sw*.5,s.y-s.h*.5); ctx.quadraticCurveTo(s.x+sw*.5+14,s.y-s.h*.5-7,s.x+sw*.5+20,s.y-s.h*.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(s.x+sw*.5,s.y-s.h*.5); ctx.quadraticCurveTo(s.x+sw*.5-13,s.y-s.h*.5-6,s.x+sw*.5-18,s.y-s.h*.5+2); ctx.stroke();
+  });
+
+  // Sandıklar
+  uwMap.chests.forEach(ch=>{
+    const dx=ch.x-player.x, dy=ch.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    const pulse=0.7+Math.sin(now*.002+ch.x)*.3;
+    ctx.save(); ctx.globalAlpha=pulse; ctx.shadowColor='#ffe060'; ctx.shadowBlur=18;
+    ctx.fillStyle=ch.opened?'#4a3010':'#6a4818'; ctx.fillRect(ch.x-20,ch.y-18,40,36);
+    ctx.strokeStyle='#c89840'; ctx.lineWidth=2; ctx.strokeRect(ch.x-20,ch.y-18,40,36);
+    ctx.strokeStyle='#c89840'; ctx.beginPath(); ctx.moveTo(ch.x-20,ch.y); ctx.lineTo(ch.x+20,ch.y); ctx.stroke();
+    ctx.fillStyle='#d4a840'; ctx.beginPath(); ctx.arc(ch.x,ch.y,4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    if(!ch.opened){ctx.fillStyle='rgba(255,220,80,.8)'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.fillText('💎 SANDIK',ch.x,ch.y-26);}
+    // Yakın mı? — aç
+    if(!ch.opened&&Math.hypot(player.x-ch.x,player.y-ch.y)<ch.r){
+      ch.opened=true;
+      items.push({x:ch.x,y:ch.y,type:'health',picked:false,heal:50});
+      for(let i=0;i<8;i++) particles.push({x:ch.x,y:ch.y,vx:(Math.random()-.5)*5,vy:-Math.random()*5-1,life:30,col:'#ffe060',r:5});
+    }
+  });
+
+  // Balıklar
+  uwMap.fish.forEach((f,i)=>{
+    const dx=f.x-player.x, dy=f.y-player.y;
+    if(Math.abs(dx)>W||Math.abs(dy)>H)return;
+    f.wag+=f.wagSpd; f.x+=f.vx; f.y+=f.vy;
+    if(f.x<0)f.x=MAP; if(f.x>MAP)f.x=0;
+    if(f.y<MAP*.05)f.vy=Math.abs(f.vy); if(f.y>MAP*.85)f.vy=-Math.abs(f.vy);
+    const dir=f.vx>=0?1:-1;
+    ctx.save(); ctx.translate(f.x,f.y); ctx.scale(dir,1); ctx.globalAlpha=0.82;
+    ctx.fillStyle=f.col; ctx.beginPath(); ctx.ellipse(0,0,f.size,f.size*.4,0,0,Math.PI*2); ctx.fill();
+    const wag=Math.sin(f.wag)*.5;
+    ctx.beginPath(); ctx.moveTo(-f.size*.7,0); ctx.lineTo(-f.size*1.4,f.size*.5+wag*7); ctx.lineTo(-f.size*1.4,-f.size*.5+wag*7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.arc(f.size*.5,-f.size*.1,f.size*.13,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(f.size*.52,-f.size*.12,f.size*.05,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+  ctx.globalAlpha=1;
+
+  // Çıkış portalleri (yüzeye)
+  uwMap.portals.forEach(p=>{
+    const pulse=0.55+Math.sin(now*.003+p.x*.001)*.45;
+    ctx.save(); ctx.globalAlpha=pulse; ctx.shadowColor='#80e8ff'; ctx.shadowBlur=28;
+    ctx.strokeStyle='#80e8ff'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='rgba(80,200,255,0.14)'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='rgba(150,230,255,0.9)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('🌊 YÜZEY',p.x,p.y-p.r-8);
+  });
+
+  // Oyuncu
+  if(player.alive){
+    const sz=72;
+    ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(player.x+3,player.y+6,sz*.28,sz*.09,0,0,Math.PI*2); ctx.fill();
+    ctx.save(); ctx.translate(player.x,player.y); ctx.rotate(player.angle+Math.PI/2);
+    if(!player._cvs){player._cvs=document.createElement('canvas');player._cvs.width=sz;player._cvs.height=sz;drawCharSprite(player._cvs.getContext('2d'),player.char,sz);}
+    ctx.drawImage(player._cvs,-sz/2,-sz*.72); ctx.restore();
+    ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(player.char.n,player.x,player.y-sz*.8);
+  }
+
+  // Partiküller
+  particles.forEach(pt=>{
+    ctx.fillStyle=pt.col; ctx.globalAlpha=Math.max(0,pt.life/30);
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.r||2.5,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  // Baloncuklar (ekran sabit, dekoratif)
+  for(let i=0;i<7;i++){
+    const bx=W*(0.1+i*.13), by=H*(0.25+Math.sin(now*.001+i*0.9)*.2);
+    ctx.strokeStyle='rgba(180,235,255,0.55)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(bx,by,3+i%3*2,0,Math.PI*2); ctx.stroke();
+  }
+  // Su üstü dalgaları (üst kenar)
+  ctx.fillStyle='rgba(60,170,200,0.2)'; ctx.beginPath(); ctx.moveTo(0,0);
+  for(let x=0;x<=W;x+=16){ctx.lineTo(x,Math.sin(x*.02+now*.0016)*18+Math.sin(x*.033+now*.002)*10+28);}
+  ctx.lineTo(W,0); ctx.closePath(); ctx.fill();
+  // Vinyet
+  const uwV=ctx.createRadialGradient(W/2,H/2,H*.25,W/2,H/2,H*.9);
+  uwV.addColorStop(0,'rgba(0,0,0,0)'); uwV.addColorStop(1,'rgba(0,20,32,0.75)');
+  ctx.fillStyle=uwV; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(120,220,255,0.75)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('🤿 SU ALTI BOYUTU  •  Mavi portala git → Yüzeye çık  •  ÇIKIŞ butonuna bas',W/2,H-18);
+}
+
+// yardımcı (boyut içinde projeksiyon gerekmez, düz koordinat)
+function isoProjectDim(wx,wy){return {x:wx,y:wy};}
 
 function renderTop(W,H){
   ctx.save();ctx.translate(-camera.x,-camera.y);
