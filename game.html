@@ -1726,7 +1726,10 @@ function startGame(mode){
   const c=selChar;
   const isCombo=curMap==='combo';
   const baseHp=isCombo?(c.hp||110)*2:(c.hp||110);
-  player={x:MAP/2+Math.random()*400-200,y:MAP/2+Math.random()*400-200,char:c,hp:baseHp,maxHp:baseHp,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0,companions:[]};
+  // Combo: tropikal bölgede başla
+  const startX = (isCombo&&mapObjects.comboZones) ? mapObjects.comboZones.tropical.x+mapObjects.comboZones.tropical.w*0.5 : MAP/2+Math.random()*400-200;
+  const startY = (isCombo&&mapObjects.comboZones) ? mapObjects.comboZones.tropical.y+mapObjects.comboZones.tropical.h*0.5 : MAP/2+Math.random()*400-200;
+  player={x:startX,y:startY,char:c,hp:baseHp,maxHp:baseHp,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0,companions:[]};
   const botCount=isCombo?99:29;
   spawnBots(botCount);
   aliveN=botCount+1;kills=0;superCd=0;isSubmerged=false;inCave=false;dimension='surface';
@@ -4702,37 +4705,50 @@ function make3DFence(x,z){
 
 function makeCharMesh(char,isPlayer){
   const group=new THREE.Group();
-  // Gövde — basit renkli kapsül (low-poly Zooba stili)
+  const S=2.2; // boyut çarpanı — Zooba'da karakterler büyük görünür
   const bodyCol=new THREE.Color(char.col||'#e08030');
-  const bodyGeo=new THREE.CapsuleGeometry(0.22,0.28,4,8);
+  // Gövde
+  const bodyGeo=new THREE.CapsuleGeometry(0.22*S,0.28*S,4,8);
   const bodyMat=new THREE.MeshLambertMaterial({color:bodyCol});
   const body=new THREE.Mesh(bodyGeo,bodyMat);
-  body.position.y=0.42;
+  body.position.y=0.42*S;
   body.castShadow=true;
   group.add(body);
   // Kafa
-  const headGeo=new THREE.SphereGeometry(0.19,8,6);
+  const headGeo=new THREE.SphereGeometry(0.19*S,8,6);
   const headMat=new THREE.MeshLambertMaterial({color:bodyCol});
   const head=new THREE.Mesh(headGeo,headMat);
-  head.position.y=0.85;
+  head.position.y=0.85*S;
   head.castShadow=true;
   group.add(head);
   // Gözler
-  const eyeGeo=new THREE.SphereGeometry(0.045,5,4);
-  const eyeMat=new THREE.MeshBasicMaterial({color:0x111111});
-  [-0.07,0.07].forEach(ex=>{
+  const eyeGeo=new THREE.SphereGeometry(0.055*S,5,4);
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xffffff});
+  const pupilMat=new THREE.MeshBasicMaterial({color:0x111111});
+  [-0.07*S,0.07*S].forEach(ex=>{
     const eye=new THREE.Mesh(eyeGeo,eyeMat);
-    eye.position.set(ex,0.88,0.16);
+    eye.position.set(ex,0.88*S,0.17*S);
     group.add(eye);
+    const pupil=new THREE.Mesh(new THREE.SphereGeometry(0.03*S,5,4),pupilMat);
+    pupil.position.set(ex,0.88*S,0.21*S);
+    group.add(pupil);
   });
+  // Oyuncu için yıldız / bot için farklı renk
+  if(isPlayer){
+    const ringGeo=new THREE.TorusGeometry(0.38*S,0.04*S,6,16);
+    const ringMat=new THREE.MeshBasicMaterial({color:0xffee00});
+    const ring=new THREE.Mesh(ringGeo,ringMat);
+    ring.rotation.x=Math.PI/2;
+    ring.position.y=0.05;
+    group.add(ring);
+  }
   // Gölge disk
-  const shadowGeo=new THREE.CircleGeometry(0.25,10);
-  const shadowMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.22});
+  const shadowGeo=new THREE.CircleGeometry(0.32*S,10);
+  const shadowMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.25});
   const shadowDisk=new THREE.Mesh(shadowGeo,shadowMat);
   shadowDisk.rotation.x=-Math.PI/2;
   shadowDisk.position.y=0.01;
   group.add(shadowDisk);
-  // İsim sprite
   group.userData.char=char;
   group.userData.isPlayer=isPlayer;
   return group;
@@ -4880,12 +4896,11 @@ function render3D(){
     }
   }
 
-  // Kamera — oyuncuyu takip et, Zooba izometrik açısı
+  // Kamera — Zooba izometrik açısı
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
-    // Karakter ~0.9 birim yüksek, kamera yakın ve alçak olmalı
-    three.cam.position.set(p.x-1.5, 8, p.z+10);
-    three.cam.lookAt(p.x, 0.5, p.z);
+    three.cam.position.set(p.x, 18, p.z+22);
+    three.cam.lookAt(p.x, 1.5, p.z);
   }
 
   three.renderer.render(three.scene,three.cam);
