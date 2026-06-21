@@ -2379,10 +2379,21 @@ function render2D(){
 }
 function render(){
   try{
-    if(three.renderer){render3D();}
-    else{render2D();}
+    if(three.renderer){
+      // 3D modda canvas gizli, threeWrap görünür
+      if(canvas)canvas.style.display='none';
+      render3D();
+    }else{
+      // 2D modda canvas görünür, threeWrap gizli
+      if(canvas)canvas.style.display='block';
+      const tw=document.getElementById('threeWrap');
+      if(tw)tw.style.display='none';
+      render2D();
+    }
   }catch(e){
+    console.warn('render err:',e);
     three.renderer=null;
+    if(canvas)canvas.style.display='block';
     render2D();
   }
   if(player&&player.alive){
