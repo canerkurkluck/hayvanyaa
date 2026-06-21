@@ -1354,6 +1354,7 @@ function genMap(mt){
     // Mağara bölgesi — haritanın sol alt köşesi
     o.caves.push({x:MAP*0.12,y:MAP*0.78,r:200,isDeep:true});
     o.caves.push({x:MAP*0.18,y:MAP*0.85,r:120,isDeep:true});
+    for(let i=0;i<10;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:140+R()*100});
   }
   // ── ZOO haritası ──────────────────────────────────────────
   if(mt==='zoo'){
@@ -1437,6 +1438,8 @@ function genMap(mt){
     for(let i=0;i<120;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:22+R()*36,h:14+R()*24,a:R()*Math.PI*2});
     // Kütükler (bank olarak)
     for(let i=0;i<80;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:50+R()*60,a:R()*Math.PI});
+    // Zoo mağaraları
+    for(let i=0;i<12;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:140+R()*100});
   } else {
   // yollar (zoo dışı haritalar)
   for(let p=0;p<4;p++){
@@ -1448,7 +1451,7 @@ function genMap(mt){
   if(mt!=='river') for(let i=0;i<tN;i++) o.trees.push({x:R()*MAP,y:R()*MAP,r:18+R()*22,variant:Math.floor(R()*3)});
   if(mt!=='river') for(let i=0;i<300;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:24+R()*44,h:16+R()*34,tall:mt==='cappadocia'&&R()<0.35,a:R()*Math.PI*2});
   for(let i=0;i<900;i++) o.bushes.push({x:R()*MAP,y:R()*MAP,r:14+R()*18,variant:Math.floor(R()*2)});
-  if(mt!=='river') for(let i=0;i<12;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:140+R()*100});
+  for(let i=0;i<12;i++) o.caves.push({x:R()*MAP,y:R()*MAP,r:140+R()*100});
   for(let i=0;i<250;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:60+R()*80,a:R()*Math.PI});
   // su yamaçları (ada)
   if(mt==='island') for(let i=0;i<8;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:200+R()*300,h:150+R()*200,isWater:true,a:0});
