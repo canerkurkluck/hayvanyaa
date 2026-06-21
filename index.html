@@ -1113,8 +1113,6 @@ function drawWeaponSprite(c2d, wid, size){
 }
 
 // ── LOBİ KARAKTER KART ────────────────────────────────────
-const CHAR_TROPHIES={lion:4820,croc:3650,lynx:5100,wolf:4200,squirrel:2980,turtle:3800,giraffe:4550,panda:3200,penguin:2750,shark:4900,tiger:5300,eagle:4100,chameleon:3400,bat:2900,raven:3700,anteater:2600,parrot:3100,flamingo:4400,beaver:2800,elephant:5500,llama:2400,zebra:3300,cardinal:4600,hedgehog:3000,leopard:4700,cheetah:5200};
-const CHAR_LEVELS={lion:18,croc:14,lynx:21,wolf:16,squirrel:11,turtle:15,giraffe:17,panda:12,penguin:10,shark:20,tiger:22,eagle:15,chameleon:13,bat:11,raven:14,anteater:9,parrot:12,flamingo:17,beaver:10,elephant:24,llama:9,zebra:13,cardinal:18,hedgehog:12,leopard:19,cheetah:23};
 function buildCharGrid(){
   const g=document.getElementById('charGrid');g.innerHTML='';
   CHARS.forEach((c,i)=>{
@@ -1174,6 +1172,8 @@ const CHAR_TITLES = {
   zebra:'Çizgili Şaşırtmaca', cardinal:'Kırmızı Zırh', hedgehog:'Diken Topu',
   leopard:'Anadolu Parsı', cheetah:'Sürat Şampiyonu',
 };
+const CHAR_TROPHIES={lion:4820,croc:3650,lynx:5100,wolf:4200,squirrel:2980,turtle:3800,giraffe:4550,panda:3200,penguin:2750,shark:4900,tiger:5300,eagle:4100,chameleon:3400,bat:2900,raven:3700,anteater:2600,parrot:3100,flamingo:4400,beaver:2800,elephant:5500,llama:2400,zebra:3300,cardinal:4600,hedgehog:3000,leopard:4700,cheetah:5200};
+const CHAR_LEVELS={lion:18,croc:14,lynx:21,wolf:16,squirrel:11,turtle:15,giraffe:17,panda:12,penguin:10,shark:20,tiger:22,eagle:15,chameleon:13,bat:11,raven:14,anteater:9,parrot:12,flamingo:17,beaver:10,elephant:24,llama:9,zebra:13,cardinal:18,hedgehog:12,leopard:19,cheetah:23};
 const CHAR_STATS = {
   // [hp(0-100), dmg(0-100), spd(0-100)]
   lion:[80,75,55], croc:[90,70,45], lynx:[60,80,75], wolf:[65,72,70],
