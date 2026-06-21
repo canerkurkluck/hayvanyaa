@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
 <title>Hayvanya</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a;font-family:-apple-system,sans-serif;}
@@ -210,7 +211,8 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
 </div>
 
 <div id="gameWrap">
-  <canvas id="gc"></canvas>
+  <canvas id="gc" style="display:none"></canvas>
+  <div id="threeWrap" style="position:absolute;inset:0;"></div>
   <div id="hud">
     <div id="mm"><canvas id="mmC" width="90" height="90"></canvas></div>
     <div id="alive"><span id="aliveBadge">👥 30</span><span id="killBadge">💀 0</span></div>
@@ -1532,6 +1534,7 @@ function startGame(mode){
   ctx=canvas.getContext('2d');
   mmCtx=document.getElementById('mmC').getContext('2d');
   document.getElementById('hpLbl').textContent=c.n;
+  init3D();
   updateWSlots();setupJoy();setupInput();
   gState='playing';
   if(rafId)cancelAnimationFrame(rafId);
@@ -3716,6 +3719,421 @@ function setupInput(){
   gc.onmouseup=()=>md=false;
   gc.onclick=e=>{if(player&&player.alive&&gState==='playing'&&camMode!=='first'){const cx=e.offsetX+camera.x,cy=e.offsetY+camera.y;player.angle=Math.atan2(cy-player.y,cx-player.x);doAtk();}};
   window.onresize=()=>{if(canvas){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}};
+}
+
+// ══════════════════════════════════════════════════════════
+// THREE.JS 3D RENDER SİSTEMİ
+// ══════════════════════════════════════════════════════════
+let three={renderer:null,scene:null,cam:null,clock:null};
+let t3={ground:null,trees:[],rocks:[],logs:[],bushes:[],rivers:[],caves:[],
+        botMeshes:{},bulletMeshes:[],playerMesh:null,
+        safeDome:null,safeRing:null};
+const SCALE=0.01; // oyun koordinatı → 3D birim (8000 → 80)
+
+function w2t(x,y){return {x:(x-MAP/2)*SCALE, z:(y-MAP/2)*SCALE};}
+
+function init3D(){
+  const wrap=document.getElementById('threeWrap');
+  wrap.innerHTML='';
+
+  // Renderer
+  const renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.1;
+  wrap.appendChild(renderer.domElement);
+  three.renderer=renderer;
+
+  // Sahne
+  const scene=new THREE.Scene();
+  scene.fog=new THREE.Fog(0x87ceeb,30,120);
+  three.scene=scene;
+
+  // Gökyüzü rengi
+  renderer.setClearColor(0x87ceeb);
+
+  // Işıklar
+  const ambient=new THREE.AmbientLight(0xffffff,0.7);
+  scene.add(ambient);
+  const sun=new THREE.DirectionalLight(0xfffbe0,1.2);
+  sun.position.set(20,40,20);
+  sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.camera.near=0.5;
+  sun.shadow.camera.far=200;
+  sun.shadow.camera.left=-60;sun.shadow.camera.right=60;
+  sun.shadow.camera.top=60;sun.shadow.camera.bottom=-60;
+  scene.add(sun);
+  const fill=new THREE.DirectionalLight(0xb0d8ff,0.4);
+  fill.position.set(-10,10,-10);
+  scene.add(fill);
+
+  // Kamera — Zooba izometrik açısı
+  const cam=new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,0.1,300);
+  cam.position.set(0,22,18);
+  cam.lookAt(0,0,0);
+  three.cam=cam;
+
+  three.clock=new THREE.Clock();
+
+  // Haritayı 3D'ye dönüştür
+  build3DMap(scene);
+
+  // Oyuncuyu ekle
+  t3.playerMesh=makeCharMesh(player.char,true);
+  scene.add(t3.playerMesh);
+
+  // Botları ekle
+  bots.forEach(b=>{
+    const m=makeCharMesh(b.char,false);
+    scene.add(m);
+    t3.botMeshes[b.id]=m;
+  });
+
+  // Güvenli bölge halkası
+  const ringGeo=new THREE.TorusGeometry(1,0.08,8,64);
+  const ringMat=new THREE.MeshBasicMaterial({color:0x40ddff,transparent:true,opacity:0.7});
+  t3.safeRing=new THREE.Mesh(ringGeo,ringMat);
+  t3.safeRing.rotation.x=Math.PI/2;
+  scene.add(t3.safeRing);
+
+  window.addEventListener('resize',()=>{
+    cam.aspect=window.innerWidth/window.innerHeight;
+    cam.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+  });
+}
+
+function build3DMap(scene){
+  const p=mapPal||{g1:'#5aaa3a',g2:'#4a9a2a'};
+  const mapSize=MAP*SCALE;
+
+  // Zemin — büyük düz plaka
+  const groundGeo=new THREE.PlaneGeometry(mapSize,mapSize,1,1);
+  const groundMat=new THREE.MeshLambertMaterial({color:new THREE.Color(p.g1||'#5aaa3a')});
+  const ground=new THREE.Mesh(groundGeo,groundMat);
+  ground.rotation.x=-Math.PI/2;
+  ground.receiveShadow=true;
+  scene.add(ground);
+
+  // Su/Nehir — düşük düzlemler
+  mapObjects.rivers.forEach(r=>{
+    if(r.pts.length<2)return;
+    // Her nehir segmenti için düzlem
+    for(let i=0;i<r.pts.length-1;i++){
+      const a=r.pts[i],b=r.pts[i+1];
+      const ta=w2t(a.x,a.y),tb=w2t(b.x,b.y);
+      const dx=tb.x-ta.x,dz=tb.z-ta.z;
+      const len=Math.sqrt(dx*dx+dz*dz);
+      const w=(r.w||100)*SCALE*1.2;
+      const geo=new THREE.PlaneGeometry(len,w);
+      const mat=new THREE.MeshLambertMaterial({color:0x2a9070,transparent:true,opacity:0.9});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.rotation.x=-Math.PI/2;
+      mesh.position.set((ta.x+tb.x)/2,-0.05,(ta.z+tb.z)/2);
+      mesh.rotation.z=-Math.atan2(dz,dx);
+      mesh.rotation.x=-Math.PI/2;
+      scene.add(mesh);
+      // Su kenarı koyu
+      const edgeMat=new THREE.MeshLambertMaterial({color:0x1a6050,transparent:true,opacity:0.7});
+      const edgeGeo=new THREE.PlaneGeometry(len,w+0.3);
+      const edge=new THREE.Mesh(edgeGeo,edgeMat);
+      edge.rotation.x=-Math.PI/2;
+      edge.position.set((ta.x+tb.x)/2,-0.06,(ta.z+tb.z)/2);
+      edge.rotation.z=-Math.atan2(dz,dx);
+      edge.rotation.x=-Math.PI/2;
+      scene.add(edge);
+    }
+  });
+
+  // Ağaçlar
+  mapObjects.trees.forEach(t=>{
+    const pos=w2t(t.x,t.y);
+    const tree=make3DTree(pos.x,pos.z,t.r*SCALE*1.4,t.isPalm);
+    scene.add(tree);
+    t3.trees.push(tree);
+  });
+
+  // Taşlar
+  mapObjects.rocks.forEach(r=>{
+    if(r.isWater||r.isCageWall)return;
+    const pos=w2t(r.x,r.y);
+    const rock=make3DRock(pos.x,pos.z,r.w*SCALE,r.h*SCALE);
+    scene.add(rock);
+    t3.rocks.push(rock);
+  });
+
+  // Kütükler
+  mapObjects.logs.forEach(l=>{
+    const pos=w2t(l.x,l.y);
+    const log=make3DLog(pos.x,pos.z,l.w*SCALE,l.a);
+    scene.add(log);
+    t3.logs.push(log);
+  });
+
+  // Mağaralar
+  mapObjects.caves.forEach(c=>{
+    if(c.isBuilding)return;
+    const pos=w2t(c.x,c.y);
+    const cave=make3DCave(pos.x,pos.z,c.r*SCALE);
+    scene.add(cave);
+    t3.caves.push(cave);
+  });
+
+  // Çitleri/kafes duvarlarını taş olarak
+  mapObjects.rocks.filter(r=>r.isCageWall).forEach(r=>{
+    const pos=w2t(r.x,r.y);
+    const fence=make3DFence(pos.x,pos.z);
+    scene.add(fence);
+  });
+}
+
+function make3DTree(x,z,r,isPalm){
+  const group=new THREE.Group();
+  // Gövde
+  const trunkH=r*2.2;
+  const trunkGeo=new THREE.CylinderGeometry(r*0.12,r*0.18,trunkH,6);
+  const trunkMat=new THREE.MeshLambertMaterial({color:isPalm?0x8B6914:0x5a3010});
+  const trunk=new THREE.Mesh(trunkGeo,trunkMat);
+  trunk.position.y=trunkH/2;
+  trunk.castShadow=true;
+  group.add(trunk);
+
+  if(isPalm){
+    // Palmiye — top şeklinde yeşil
+    const leafGeo=new THREE.SphereGeometry(r*0.9,6,5);
+    const leafMat=new THREE.MeshLambertMaterial({color:0x3aaa20});
+    const leaf=new THREE.Mesh(leafGeo,leafMat);
+    leaf.position.y=trunkH+r*0.5;
+    leaf.castShadow=true;
+    group.add(leaf);
+  } else {
+    // Normal konik ağaç — 3 katman koni (Zooba stili)
+    const colors=[0x3a8820,0x2a7010,0x4a9830];
+    [[r*1.1,r*0.6,0],[r*0.85,r*0.55,r*0.55],[r*0.55,r*0.45,r*1.0]].forEach(([rb,rt,yo],i)=>{
+      const geo=new THREE.ConeGeometry(rb,r*1.1,7);
+      const mat=new THREE.MeshLambertMaterial({color:colors[i]});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.position.y=trunkH+yo+r*0.4;
+      mesh.castShadow=true;
+      group.add(mesh);
+    });
+  }
+  group.position.set(x,0,z);
+  return group;
+}
+
+function make3DRock(x,z,w,h){
+  const group=new THREE.Group();
+  const geo=new THREE.DodecahedronGeometry(Math.max(w,h)*0.5,0);
+  const mat=new THREE.MeshLambertMaterial({color:0x7a7060});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.scale.set(1,0.6,0.8);
+  mesh.position.y=Math.max(w,h)*0.25;
+  mesh.castShadow=true;
+  mesh.receiveShadow=true;
+  group.add(mesh);
+  group.position.set(x,0,z);
+  return group;
+}
+
+function make3DLog(x,z,w,angle){
+  const geo=new THREE.CylinderGeometry(0.08,0.1,w,7);
+  const mat=new THREE.MeshLambertMaterial({color:0x5a3010});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.rotation.z=Math.PI/2;
+  mesh.rotation.y=angle||0;
+  mesh.position.y=0.08;
+  mesh.castShadow=true;
+  const g=new THREE.Group();
+  g.add(mesh);
+  g.position.set(x,0,z);
+  return g;
+}
+
+function make3DCave(x,z,r){
+  const group=new THREE.Group();
+  // Zemin çöküntüsü — koyu disk
+  const baseGeo=new THREE.CylinderGeometry(r,r*1.1,0.3,12);
+  const baseMat=new THREE.MeshLambertMaterial({color:0x1a1008});
+  const base=new THREE.Mesh(baseGeo,baseMat);
+  base.position.y=-0.1;
+  group.add(base);
+  // Kaya duvarları etrafında
+  for(let i=0;i<8;i++){
+    const a=(i/8)*Math.PI*2;
+    const rx=Math.cos(a)*r*0.9, rz=Math.sin(a)*r*0.9;
+    const rh=0.3+Math.random()*0.4;
+    const rGeo=new THREE.DodecahedronGeometry(r*0.18+Math.random()*r*0.1,0);
+    const rMat=new THREE.MeshLambertMaterial({color:0x4a3828});
+    const rock=new THREE.Mesh(rGeo,rMat);
+    rock.position.set(rx,rh*0.3,rz);
+    rock.castShadow=true;
+    group.add(rock);
+  }
+  // Kristal ışık
+  const glow=new THREE.PointLight(0x40ff80,0.6,r*3);
+  glow.position.y=0.5;
+  group.add(glow);
+  // MAĞARA etiketi (sprite)
+  group.position.set(x,0,z);
+  group.userData.isCave=true;
+  return group;
+}
+
+function make3DFence(x,z){
+  const geo=new THREE.BoxGeometry(0.25,0.6,0.25);
+  const mat=new THREE.MeshLambertMaterial({color:0x7a6040});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.y=0.3;
+  mesh.castShadow=true;
+  const g=new THREE.Group();
+  g.add(mesh);
+  g.position.set(x,0,z);
+  return g;
+}
+
+function makeCharMesh(char,isPlayer){
+  const group=new THREE.Group();
+  // Gövde — basit renkli kapsül (low-poly Zooba stili)
+  const bodyCol=new THREE.Color(char.col||'#e08030');
+  const bodyGeo=new THREE.CapsuleGeometry(0.22,0.28,4,8);
+  const bodyMat=new THREE.MeshLambertMaterial({color:bodyCol});
+  const body=new THREE.Mesh(bodyGeo,bodyMat);
+  body.position.y=0.42;
+  body.castShadow=true;
+  group.add(body);
+  // Kafa
+  const headGeo=new THREE.SphereGeometry(0.19,8,6);
+  const headMat=new THREE.MeshLambertMaterial({color:bodyCol});
+  const head=new THREE.Mesh(headGeo,headMat);
+  head.position.y=0.85;
+  head.castShadow=true;
+  group.add(head);
+  // Gözler
+  const eyeGeo=new THREE.SphereGeometry(0.045,5,4);
+  const eyeMat=new THREE.MeshBasicMaterial({color:0x111111});
+  [-0.07,0.07].forEach(ex=>{
+    const eye=new THREE.Mesh(eyeGeo,eyeMat);
+    eye.position.set(ex,0.88,0.16);
+    group.add(eye);
+  });
+  // Gölge disk
+  const shadowGeo=new THREE.CircleGeometry(0.25,10);
+  const shadowMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0.22});
+  const shadowDisk=new THREE.Mesh(shadowGeo,shadowMat);
+  shadowDisk.rotation.x=-Math.PI/2;
+  shadowDisk.position.y=0.01;
+  group.add(shadowDisk);
+  // İsim sprite
+  group.userData.char=char;
+  group.userData.isPlayer=isPlayer;
+  return group;
+}
+
+function makeBulletMesh(){
+  const geo=new THREE.SphereGeometry(0.1,6,4);
+  const mat=new THREE.MeshBasicMaterial({color:0xffee44});
+  const mesh=new THREE.Mesh(geo,mat);
+  return mesh;
+}
+
+function render3D(){
+  if(!three.renderer||!three.scene||!three.cam)return;
+  const now=Date.now();
+
+  // Oyuncu pozisyonu güncelle
+  if(player&&player.alive&&t3.playerMesh){
+    const p=w2t(player.x,player.y);
+    t3.playerMesh.position.set(p.x,0,p.z);
+    t3.playerMesh.rotation.y=-player.angle-Math.PI/2;
+  }
+
+  // Bot pozisyonları güncelle
+  bots.forEach(b=>{
+    const m=t3.botMeshes[b.id];
+    if(!m)return;
+    const p=w2t(b.x,b.y);
+    m.position.set(p.x,0,p.z);
+    m.rotation.y=-b.angle-Math.PI/2;
+    m.visible=b.alive;
+    // HP göstergesi rengi
+    const body=m.children[0];
+    if(body&&body.material){
+      if(b.frozen>0) body.material.color.set(0x80ccff);
+      else body.material.color.set(new THREE.Color(b.char.col||'#e08030'));
+    }
+  });
+
+  // Mermi mesh'lerini senkronize et
+  // Fazla mesh'leri sil
+  while(t3.bulletMeshes.length>bullets.length){
+    const m=t3.bulletMeshes.pop();
+    three.scene.remove(m);
+  }
+  // Eksik mesh'leri ekle
+  while(t3.bulletMeshes.length<bullets.length){
+    const m=makeBulletMesh();
+    three.scene.add(m);
+    t3.bulletMeshes.push(m);
+  }
+  // Pozisyonları güncelle
+  bullets.forEach((b,i)=>{
+    const m=t3.bulletMeshes[i];
+    if(!m)return;
+    const p=w2t(b.x,b.y);
+    m.position.set(p.x,0.5,p.z);
+  });
+
+  // Güvenli bölge halkası
+  if(t3.safeRing){
+    const sc=w2t(safeZone.x,safeZone.y);
+    t3.safeRing.position.set(sc.x,0.05,sc.z);
+    t3.safeRing.scale.setScalar(safeZone.r*SCALE);
+    t3.safeRing.material.opacity=0.5+Math.sin(now*0.003)*0.2;
+  }
+
+  // Mağara kristal ışık animasyonu
+  t3.caves.forEach(c=>{
+    const light=c.children.find(ch=>ch.isLight);
+    if(light) light.intensity=0.4+Math.sin(now*0.002)*0.3;
+  });
+
+  // Kamera — oyuncuyu takip et, Zooba izometrik açısı
+  if(player&&player.alive){
+    const p=w2t(player.x,player.y);
+    const camDist=22, camH=18;
+    const camAngle=-Math.PI*0.08; // hafif kuzey-doğu
+    three.cam.position.set(
+      p.x+Math.sin(camAngle)*camDist*0.3,
+      camH,
+      p.z+camDist
+    );
+    three.cam.lookAt(p.x,0,p.z-2);
+  }
+
+  three.renderer.render(three.scene,three.cam);
+
+  // Minimap için 2D canvas hâlâ çalışıyor
+  if(mmCtx) renderMM();
+}
+
+// render() fonksiyonunu 3D ile değiştir
+const _origRender=render;
+function render(){
+  if(three.renderer){
+    render3D();
+  } else {
+    _origRender();
+  }
+  // HUD güncelle (HP bar, alive sayısı)
+  if(player&&player.alive){
+    const hpF=document.getElementById('hpF');
+    if(hpF) hpF.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
+  }
 }
 
 buildCharGrid();
