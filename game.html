@@ -1314,7 +1314,10 @@ function genMap(mt){
   const R=()=>Math.random();
   const o=mapObjects;
   o.trees=[];o.rocks=[];o.bushes=[];o.caves=[];o.logs=[];o.rivers=[];o.paths=[];
+  o.buildings=[];o.cars=[];o.pyramids=[];o.bridges=[];o.islands=[];o.wildAnimals=[];
+  o.volcano=null;o.sea=null;o.comboZones=null;
   items=[];guards=[];bullets=[];particles=[];
+  wildAnimals=[];playerCar=null;inBuilding=null;
 
   const pals={
     forest:  {g1:'#2a5518',g2:'#336620',g3:'#1e4010',tree:'#1a4010',tree2:'#2a6018',bush:'#1a5c10',rock:'#6a6a6a'},
