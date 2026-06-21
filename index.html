@@ -4590,6 +4590,113 @@ function build3DMap(scene){
     }
   });
 
+  // ── COMBO: Binalar ──
+  if(isCombo&&mapObjects.buildings){
+    mapObjects.buildings.forEach(b=>{
+      const bp=w2t(b.x+b.w/2, b.y+b.h/2);
+      const bw=b.w*SCALE, bh=b.h*SCALE;
+      const height={building:4,hut:1.8,igloo:1.5,tent:2,temple:3,pyramid_entrance:2}[b.type]||2.5;
+      const col={building:0x8090a0,hut:0x8B5E2A,igloo:0xd0e8f0,tent:0xc8a060,temple:0x504030,pyramid_entrance:0xc8a040}[b.type]||0x909090;
+      const roofCol=new THREE.Color(b.roof||'#607080');
+      // Duvarlar
+      const wallGeo=new THREE.BoxGeometry(bw,height,bh);
+      const wallMat=new THREE.MeshLambertMaterial({color:col});
+      const wall=new THREE.Mesh(wallGeo,wallMat);
+      wall.position.set(bp.x, height/2, bp.z);
+      wall.castShadow=true; wall.receiveShadow=true;
+      scene.add(wall);
+      // Çatı
+      if(b.type==='igloo'){
+        const dGeo=new THREE.SphereGeometry(Math.max(bw,bh)*0.55,8,6,0,Math.PI*2,0,Math.PI/2);
+        const dMat=new THREE.MeshLambertMaterial({color:0xe8f4ff});
+        const dome=new THREE.Mesh(dGeo,dMat);
+        dome.position.set(bp.x,height,bp.z);
+        scene.add(dome);
+      } else if(b.type==='tent'){
+        const tGeo=new THREE.ConeGeometry(Math.max(bw,bh)*0.65,height*0.9,6);
+        const tMat=new THREE.MeshLambertMaterial({color:roofCol});
+        const tent=new THREE.Mesh(tGeo,tMat);
+        tent.position.set(bp.x,height+height*0.45,bp.z);
+        scene.add(tent);
+      } else {
+        const rGeo=new THREE.BoxGeometry(bw+0.3,0.4,bh+0.3);
+        const rMat=new THREE.MeshLambertMaterial({color:roofCol});
+        const roof=new THREE.Mesh(rGeo,rMat);
+        roof.position.set(bp.x,height+0.2,bp.z);
+        scene.add(roof);
+      }
+      // Etiket için userData
+      wall.userData.buildingLabel=b.label;
+    });
+  }
+
+  // ── COMBO: Arabalar ──
+  if(isCombo&&mapObjects.cars){
+    mapObjects.cars.forEach((car,i)=>{
+      const cp=w2t(car.x,car.y);
+      const grp=new THREE.Group();
+      // Gövde
+      const bodyGeo=new THREE.BoxGeometry(1.2,0.5,0.65);
+      const bodyMat=new THREE.MeshLambertMaterial({color:new THREE.Color(car.color||'#e03030')});
+      const body=new THREE.Mesh(bodyGeo,bodyMat);
+      body.position.y=0.35;
+      grp.add(body);
+      // Üst kabini
+      const cabGeo=new THREE.BoxGeometry(0.7,0.4,0.6);
+      const cab=new THREE.Mesh(cabGeo,bodyMat);
+      cab.position.set(0,0.75,0);
+      grp.add(cab);
+      // Tekerlekler
+      const wGeo=new THREE.CylinderGeometry(0.18,0.18,0.12,8);
+      const wMat=new THREE.MeshLambertMaterial({color:0x222222});
+      [[-0.5,0.18,-0.35],[0.5,0.18,-0.35],[-0.5,0.18,0.35],[0.5,0.18,0.35]].forEach(([wx,wy,wz])=>{
+        const w=new THREE.Mesh(wGeo,wMat);
+        w.rotation.z=Math.PI/2;
+        w.position.set(wx,wy,wz);
+        grp.add(w);
+      });
+      grp.position.set(cp.x,0,cp.z);
+      grp.rotation.y=-car.angle;
+      grp.userData.carIdx=i;
+      scene.add(grp);
+      t3.carMeshes=t3.carMeshes||[];
+      t3.carMeshes.push({mesh:grp,car});
+    });
+  }
+
+  // ── COMBO: Volkan ──
+  if(isCombo&&mapObjects.volcano){
+    const v=mapObjects.volcano;
+    const vp=w2t(v.x,v.y);
+    const vGeo=new THREE.ConeGeometry(v.r*SCALE*0.8,v.r*SCALE*0.9,10);
+    const vMat=new THREE.MeshLambertMaterial({color:0x5a2010});
+    const vMesh=new THREE.Mesh(vGeo,vMat);
+    vMesh.position.set(vp.x,v.r*SCALE*0.45,vp.z);
+    vMesh.castShadow=true;
+    scene.add(vMesh);
+    // Krater — kırmızı top
+    const crGeo=new THREE.SphereGeometry(v.r*SCALE*0.25,8,6);
+    const crMat=new THREE.MeshBasicMaterial({color:0xff3300});
+    const cr=new THREE.Mesh(crGeo,crMat);
+    cr.position.set(vp.x,v.r*SCALE*0.85,vp.z);
+    scene.add(cr);
+  }
+
+  // ── COMBO: Piramitler ──
+  if(isCombo&&mapObjects.pyramids){
+    mapObjects.pyramids.forEach(py=>{
+      const pp=w2t(py.x,py.y);
+      const h=py.r*SCALE*0.7;
+      const pGeo=new THREE.ConeGeometry(py.r*SCALE*0.6,h,4);
+      const pMat=new THREE.MeshLambertMaterial({color:0xd4a830});
+      const pMesh=new THREE.Mesh(pGeo,pMat);
+      pMesh.position.set(pp.x,h/2,pp.z);
+      pMesh.rotation.y=Math.PI/4;
+      pMesh.castShadow=true;
+      scene.add(pMesh);
+    });
+  }
+
   t3.staticPool={trees:{},rocks:{},logs:{}};
 }
 
@@ -4824,6 +4931,15 @@ function render3D(){
     const p=w2t(b.x,b.y);
     m.position.set(p.x,0.5,p.z);
   });
+
+  // Araba mesh pozisyonları güncelle
+  if(t3.carMeshes){
+    t3.carMeshes.forEach(({mesh,car})=>{
+      const cp=w2t(car.x,car.y);
+      mesh.position.set(cp.x,0,cp.z);
+      mesh.rotation.y=-car.angle;
+    });
+  }
 
   // Güvenli bölge halkası
   if(t3.safeRing){
