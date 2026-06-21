@@ -296,6 +296,22 @@ let dimEntryX=0, dimEntryY=0; // giriş noktası (çıkışta geri dön)
 let caveMap={trees:[],rocks:[],bushes:[],logs:[],rivers:[],crystals:[],shrooms:[]};
 let uwMap={fish:[],seaweeds:[],stones:[],chests:[],logs:[]};
 let cavePal={g1:'#12200e',g2:'#1a2c14',g3:'#0c1808',tree:'#1a3010',tree2:'#243818',rock:'#3a3228'};
+// ── SPRITE CACHE ──────────────────────────────────────────
+const spriteCache={}; // key→canvas — her karakter/boyut/durum için bir kez çiz
+function getCachedSprite(key,size,drawFn){
+  if(!spriteCache[key]){
+    const c=document.createElement('canvas');c.width=size;c.height=size;
+    drawFn(c.getContext('2d'));spriteCache[key]=c;
+  }
+  return spriteCache[key];
+}
+// Silah önbelleği
+const weaponSpriteCache={};
+function getCachedWeapon(wid,size){
+  const key=wid+'_'+size;
+  if(!weaponSpriteCache[key]){const c=document.createElement('canvas');c.width=size;c.height=size;drawWeaponSprite(c.getContext('2d'),wid,size);weaponSpriteCache[key]=c;}
+  return weaponSpriteCache[key];
+}
 let szTimer=600;
 let gState='lobby';
 let rafId=null, lastT=0;
@@ -1558,7 +1574,6 @@ function update(dt){
     // Çıkış butonu göster
     const dalBtn2=document.getElementById('dalBtn');
     if(dalBtn2&&dimension!=='surface'){dalBtn2.style.display='block';dalBtn2.innerHTML=(dimension==='cave'?'🪨<br>ÇIKIŞ':'🤿<br>ÇIKIŞ');}
-    player._cvs=null;
     return;
   }
   inWater=false;
@@ -2074,9 +2089,7 @@ function updateWSlots(){
     const w=player.weapons[i];const d=document.createElement('div');
     d.className='ws'+(i===player.activeW?' wa':'');
     if(w){
-      const cv=document.createElement('canvas');cv.width=28;cv.height=28;
-      drawWeaponSprite(cv.getContext('2d'),w.wid!==undefined?w.wid:0,28);
-      d.appendChild(cv);
+      d.appendChild(getCachedWeapon(w.wid!==undefined?w.wid:0,28));
       const wt=document.createElement('div');wt.className='wt '+w.tier;wt.textContent=w.tier==='gold'?'ALTIN':w.tier==='silver'?'GÜMÜŞ':'BRONZ';d.appendChild(wt);
     }else{d.innerHTML='<span style="color:#333;font-size:20px">—</span>';}
     d.onclick=()=>{player.activeW=i;updateWSlots();};s.appendChild(d);
@@ -2520,9 +2533,7 @@ function renderTop(W,H){
       ctx.fillStyle='#fff';ctx.fillRect(it.x-5,it.y-12,10,24);ctx.fillRect(it.x-12,it.y-5,24,10);
       ctx.fillStyle='#e74c3c';ctx.fillRect(it.x-4,it.y-11,8,22);ctx.fillRect(it.x-11,it.y-4,22,8);
     } else {
-      const wc=document.createElement('canvas');wc.width=28;wc.height=28;
-      drawWeaponSprite(wc.getContext('2d'),it.wid||0,28);
-      ctx.drawImage(wc,it.x-14,it.y-14);
+      ctx.drawImage(getCachedWeapon(it.wid||0,28),it.x-14,it.y-14);
     }
     ctx.fillStyle=it.tier==='gold'?'#f0c040':it.tier==='silver'?'#ccc':'#cd7f32';
     ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
@@ -3189,8 +3200,8 @@ function renderThird(W,H){
   mapObjects.bushes.forEach(b=>{if(!inView(b.x,b.y,b.r*2))return;ctx.fillStyle=p.bush;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();});
   mapObjects.trees.forEach(t=>{if(!inView(t.x,t.y,t.r*2))return;ctx.fillStyle=p.tree;ctx.beginPath();ctx.arc(t.x,t.y,t.r*1.2,0,Math.PI*2);ctx.fill();ctx.fillStyle=p.tree2;ctx.beginPath();ctx.arc(t.x,t.y-t.r*0.1,t.r*0.8,0,Math.PI*2);ctx.fill();});
   items.forEach(it=>{if(it.picked||!inView(it.x,it.y,30))return;ctx.fillStyle='#e74c3c';ctx.fillRect(it.x-5,it.y-10,10,20);ctx.fillRect(it.x-10,it.y-5,20,10);});
-  bots.forEach(b=>{if(!b.alive||!inView(b.x,b.y,40))return;const sz=40;const bc=document.createElement('canvas');bc.width=sz;bc.height=sz;drawCharSprite(bc.getContext('2d'),b.char,sz);ctx.drawImage(bc,b.x-sz/2,b.y-sz/2);});
-  if(player.alive){const sz=48;const pc=document.createElement('canvas');pc.width=sz;pc.height=sz;drawCharSprite(pc.getContext('2d'),player.char,sz);ctx.drawImage(pc,player.x-sz/2,player.y-sz/2);}
+  bots.forEach(b=>{if(!b.alive||!inView(b.x,b.y,40))return;const sz=40;ctx.drawImage(getCachedSprite('b_'+b.char.id+'_'+sz,sz,c2=>drawCharSprite(c2,b.char,sz)),b.x-sz/2,b.y-sz/2);});
+  if(player.alive){const sz=48;ctx.drawImage(getCachedSprite('p_'+player.char.id+'_'+sz,sz,c2=>drawCharSprite(c2,player.char,sz)),player.x-sz/2,player.y-sz/2);}
   bullets.forEach(b=>{ctx.fillStyle=b.col||'#fff';ctx.beginPath();ctx.arc(b.x,b.y,4,0,Math.PI*2);ctx.fill();});
   ctx.restore();
   ctx.fillStyle='rgba(0,0,0,0.22)';ctx.fillRect(0,H*0.7,W,H*0.3);
@@ -3217,7 +3228,7 @@ function renderFirst(W,H){
       tg.addColorStop(0,p.tree2);tg.addColorStop(1,p.tree);
       ctx.fillStyle=tg;ctx.beginPath();ctx.arc(tr.x,tr.y,tr.r,0,Math.PI*2);ctx.fill();
     });
-    bots.forEach(b=>{if(!b.alive)return;const sz=32;const bc=document.createElement('canvas');bc.width=sz;bc.height=sz;drawCharSprite(bc.getContext('2d'),b.char,sz);ctx.drawImage(bc,b.x-sz/2,b.y-sz/2);});
+    bots.forEach(b=>{if(!b.alive)return;const sz=32;ctx.drawImage(getCachedSprite('b_'+b.char.id+'_'+sz,sz,c2=>drawCharSprite(c2,b.char,sz)),b.x-sz/2,b.y-sz/2);});
     ctx.restore();
     // ağaç yaprakları üst katman
     const tg2=ctx.createRadialGradient(W/2,H/2,W*0.1,W/2,H/2,W*0.55);
@@ -3287,9 +3298,8 @@ function renderFirst(W,H){
       const sz=(1-obj.dist/500)*96+16;const sy=H*0.5+pitchOff;
       ctx.globalAlpha=hidden?0.3:1;
       ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.ellipse(sx+2,sy+sz*0.52,sz*0.38,sz*0.09,0,0,Math.PI*2);ctx.fill();
-      const bc=document.createElement('canvas');bc.width=sz;bc.height=sz;
-      drawCharSprite(bc.getContext('2d'),obj.b.char,sz);
-      ctx.drawImage(bc,sx-sz/2,sy-sz/2);
+      const szKey=Math.round(sz/8)*8;
+      ctx.drawImage(getCachedSprite('b_'+obj.b.char.id+'_'+szKey,szKey,c2=>drawCharSprite(c2,obj.b.char,szKey)),sx-sz/2,sy-sz/2,sz,sz);
       ctx.globalAlpha=1;
       // HP bar
       const bw=sz*0.9,bh=5,bx2=sx-bw/2,by2=sy-sz*0.62;
@@ -3330,14 +3340,12 @@ function renderFirst(W,H){
   ctx.fillStyle='rgba(255,255,255,0.88)';ctx.beginPath();ctx.arc(cx,cy,2.5,0,Math.PI*2);ctx.fill();
   // eldeki silah (canvas çizimi)
   if(player.weapons.length>0){
-    const wc=document.createElement('canvas');wc.width=80;wc.height=80;
-    drawWeaponSprite(wc.getContext('2d'),player.weapons[player.activeW].wid||0,80);
-    ctx.save();ctx.translate(W-70,H-70);ctx.rotate(0.25);ctx.globalAlpha=0.88;ctx.drawImage(wc,-40,-40);ctx.restore();
+    ctx.save();ctx.translate(W-70,H-70);ctx.rotate(0.25);ctx.globalAlpha=0.88;
+    ctx.drawImage(getCachedWeapon(player.weapons[player.activeW].wid||0,80),-40,-40);
+    ctx.restore();
   }
   // karakter ikonu
-  const pc2=document.createElement('canvas');pc2.width=38;pc2.height=38;
-  drawCharSprite(pc2.getContext('2d'),player.char,38);
-  ctx.drawImage(pc2,12,H-118);
+  ctx.drawImage(getCachedSprite('p_'+player.char.id+'_38',38,c2=>drawCharSprite(c2,player.char,38)),12,H-118);
 
   // ── SU ALTI OVERLAY (birinci şahıs dalma) ────────────────
   if(isSubmerged){
