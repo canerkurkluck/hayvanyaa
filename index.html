@@ -5035,23 +5035,23 @@ function render3D(){
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
     if(camMode==='iso'){
-      // Zooba izometrik
-      three.cam.position.set(p.x, 10, p.z+13);
-      three.cam.lookAt(p.x, 0, p.z-2);
+      // Zooba izometrik — karaktere yakın, hafif yukarıdan ve arkadan
+      three.cam.position.set(p.x, 5, p.z+7);
+      three.cam.lookAt(p.x, 1, p.z);
     } else if(camMode==='top'){
       // Tam üstten
-      three.cam.position.set(p.x, 30, p.z+0.1);
+      three.cam.position.set(p.x, 18, p.z+0.1);
       three.cam.lookAt(p.x, 0, p.z);
     } else if(camMode==='third'){
       // 3. şahıs — arkadan yakın
       const dx=Math.sin(player.angle), dz=Math.cos(player.angle);
-      three.cam.position.set(p.x-dx*8, 5, p.z-dz*8);
+      three.cam.position.set(p.x-dx*5, 3.5, p.z-dz*5);
       three.cam.lookAt(p.x+dx*2, 1.5, p.z+dz*2);
     } else if(camMode==='first'){
-      // 1. şahıs — karakterin gözünden, hareket yönüne bakıyor
+      // 1. şahıs — karakterin gözünden
       const dx=Math.sin(player.angle), dz=Math.cos(player.angle);
-      three.cam.position.set(p.x, 3.5, p.z);
-      three.cam.lookAt(p.x+dx*10, 2.5, p.z-dz*10);
+      three.cam.position.set(p.x+dx*0.5, 2.2, p.z+dz*0.5);
+      three.cam.lookAt(p.x+dx*10, 2.0, p.z+dz*10);
     }
   }
 
