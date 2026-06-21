@@ -4880,14 +4880,9 @@ function render3D(){
   // Kamera — oyuncuyu takip et, Zooba izometrik açısı
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
-    const camDist=22, camH=18;
-    const camAngle=-Math.PI*0.08;
-    three.cam.position.set(
-      p.x+Math.sin(camAngle)*camDist*0.3,
-      camH,
-      p.z+camDist
-    );
-    three.cam.lookAt(p.x,0,p.z-2);
+    // Karakter ~0.9 birim yüksek, kamera yakın ve alçak olmalı
+    three.cam.position.set(p.x-1.5, 8, p.z+10);
+    three.cam.lookAt(p.x, 0.5, p.z);
   }
 
   three.renderer.render(three.scene,three.cam);
