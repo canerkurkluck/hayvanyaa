@@ -1820,7 +1820,7 @@ function update(dt){
     // Bina/araba çarpışması — basit sınır kontrolü
     player.x=car.x; player.y=car.y;
     // Güvenli bölge ve normal update'in geri kalanını çalıştır
-    szTimer-=dt;if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
+    if(curMap!=='combo'){szTimer-=dt;if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);}
     const _pdxC=player.x-safeZone.x,_pdyC=player.y-safeZone.y;
     if(Math.sqrt(_pdxC*_pdxC+_pdyC*_pdyC)>safeZone.r){player.hp-=0.2*dt;if(player.hp<=0)dieDie();}
     updateWildAnimals(dt);
@@ -1845,7 +1845,7 @@ function update(dt){
       const dx=b.x-player.x,dy=b.y-player.y;
       if(Math.hypot(dx,dy)<60){hitE(b,10,true);if(!b.alive)onKill(b);}
     });
-    szTimer-=dt;if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
+    if(curMap!=='combo'){szTimer-=dt;if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);}
     const _pdxB=player.x-safeZone.x,_pdyB=player.y-safeZone.y;
     if(Math.sqrt(_pdxB*_pdxB+_pdyB*_pdyB)>safeZone.r){player.hp-=0.2*dt;if(player.hp<=0)dieDie();}
     updateWildAnimals(dt);
@@ -1988,8 +1988,10 @@ function update(dt){
   document.getElementById('supCd').textContent=superCd>0?Math.ceil(superCd/60)+'s':'';
   updateWildAnimals(dt);
   checkNearCarAndBuilding();
-  szTimer-=dt;
-  if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
+  if(curMap!=='combo'){
+    szTimer-=dt;
+    if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
+  }
   const pdx=player.x-safeZone.x,pdy=player.y-safeZone.y;
   if(Math.sqrt(pdx*pdx+pdy*pdy)>safeZone.r){player.hp-=0.2*dt;if(player.hp<=0)dieDie();}
 
@@ -5033,9 +5035,9 @@ function render3D(){
   if(player&&player.alive){
     const p=w2t(player.x,player.y);
     if(camMode==='iso'){
-      // Zooba izometrik — karaktere yakın, hafif yukarıdan
-      three.cam.position.set(p.x, 6, p.z+8);
-      three.cam.lookAt(p.x, 1, p.z-1);
+      // Zooba izometrik
+      three.cam.position.set(p.x, 10, p.z+13);
+      three.cam.lookAt(p.x, 0, p.z-2);
     } else if(camMode==='top'){
       // Tam üstten
       three.cam.position.set(p.x, 30, p.z+0.1);
