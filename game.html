@@ -134,6 +134,7 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
     <div class="mc" onclick="selM(this,'island')"><div class="mi">🏝️</div><div class="mn">Ada</div></div>
     <div class="mc" onclick="selM(this,'river')"><div class="mi">🏞️</div><div class="mn">Nehir Adaları</div></div>
     <div class="mc" onclick="selM(this,'zoo')"><div class="mi">🦁</div><div class="mn">Hayvanat Bahçesi</div></div>
+    <div class="mc" onclick="selM(this,'combo')" style="border-color:#f0c040;background:linear-gradient(180deg,#1a1030,#0e0820)"><div class="mi">🌍</div><div class="mn" style="color:#f0c040;font-weight:900">COMBO ⭐</div></div>
   </div>
   <div class="slabel" style="margin-top:10px">Kamera & Nişan</div>
   <div class="row">
@@ -222,6 +223,7 @@ select{background:#1a0800;color:#f0c040;border:1px solid #5a3a00;padding:6px 10p
     <div id="wSlots"></div>
     <div id="supCd"></div>
     <div id="joy"><div id="jB"><div id="jK"></div></div></div>
+    <button id="captureBtn" onclick="doCapture()" style="display:none;position:absolute;bottom:310px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #ffcc00;background:radial-gradient(circle at 40% 35%,rgba(255,200,0,0.8),rgba(180,80,0,0.9));color:#fff;font-size:10px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 24px rgba(255,200,0,0.7),0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;">🤝<br>YAKALA!</button>
     <button id="dalBtn" onclick="doDive()" style="display:none;position:absolute;bottom:210px;right:14px;width:80px;height:80px;border-radius:50%;border:3px solid #00e5ff;background:radial-gradient(circle at 40% 35%,rgba(0,180,255,0.7),rgba(0,60,140,0.85));color:#fff;font-size:11px;font-weight:900;pointer-events:all;z-index:20;box-shadow:0 0 24px rgba(0,220,255,0.7),0 4px 12px rgba(0,0,0,0.5);letter-spacing:1px;">🤿<br>DAL</button>
     <div id="aBtns">
       <button class="ab" id="atkBtn" onclick="doAtk()">⚔️<br>SALDIR</button>
@@ -287,6 +289,8 @@ let superCd=0, superMax=300;
 let aliveN=30, kills=0;
 let safeZone={x:MAP/2, y:MAP/2, r:MAP*0.47};
 let parachute={active:false, x:0, y:0, targetX:0, targetY:0, alt:1}; // paraşüt inişi
+let wildAnimals=[];
+let captureBtn=null;
 let inWater=false;
 let isSubmerged=false;
 let underwaterFish=[];
@@ -1311,6 +1315,7 @@ function genMap(mt){
     island:  {g1:'#c4b050',g2:'#d4c060',g3:'#a89030',tree:'#1a5c10',tree2:'#226618',bush:'#c8a040',rock:'#9a9070'},
     river:   {g1:'#4a8c30',g2:'#5a9e3a',g3:'#3a7020',tree:'#1a5010',tree2:'#2a7018',bush:'#1a6010',rock:'#7a7060'},
     zoo:     {g1:'#4aaa38',g2:'#55c040',g3:'#389028',tree:'#2a6818',tree2:'#3a8820',bush:'#2a7818',rock:'#888070'},
+    combo:   {g1:'#4a9a30',g2:'#5aaa3a',g3:'#3a8020',tree:'#2a6010',tree2:'#3a8018',bush:'#2a7010',rock:'#808070'},
   };
   mapPal=pals[mt]||pals.forest;
 
@@ -1496,6 +1501,173 @@ function genMap(mt){
   if(mt==='island') for(let i=0;i<8;i++) o.rocks.push({x:R()*MAP,y:R()*MAP,w:200+R()*300,h:150+R()*200,isWater:true,a:0});
   }
 
+  // ── COMBO HARİTASI ──────────────────────────────────────
+  if(mt==='combo'){
+    const M=MAP;
+    // Harita 5 bölgeye ayrılır (her biri ~8000x3200):
+    // [Tropikal Ada - sol üst] [Şehir - sağ üst]
+    // [Volkan - orta]
+    // [Çöl - sol alt]          [Kar/Buz - sağ alt]
+    // Ortada büyük deniz/göl — yüzerek geçilir
+    o.comboZones={
+      tropical:{x:M*0.12,y:M*0.12,w:M*0.3,h:M*0.3},
+      city:    {x:M*0.58,y:M*0.08,w:M*0.35,h:M*0.32},
+      volcano: {x:M*0.35,y:M*0.35,w:M*0.3,h:M*0.3},
+      desert:  {x:M*0.05,y:M*0.6,w:M*0.35,h:M*0.35},
+      ice:     {x:M*0.6,y:M*0.58,w:M*0.35,h:M*0.38},
+    };
+
+    // ── ORTADA DENİZ (yüzerek geçilir) ──
+    // Bölgeler arasındaki boşluklar nehir/deniz olacak
+    // Ana deniz — haritanın ortası
+    const seaPts=[];
+    seaPts.push({x:M*0.28,y:M*0.28});seaPts.push({x:M*0.5,y:M*0.22});
+    seaPts.push({x:M*0.72,y:M*0.30});seaPts.push({x:M*0.78,y:M*0.5});
+    seaPts.push({x:M*0.7,y:M*0.68});seaPts.push({x:M*0.5,y:M*0.72});
+    seaPts.push({x:M*0.28,y:M*0.65});seaPts.push({x:M*0.22,y:M*0.5});
+    seaPts.push({x:M*0.28,y:M*0.28});
+    o.sea={pts:seaPts,isOcean:true};
+    o.rivers.push({pts:[{x:M*0.28,y:M*0.38},{x:M*0.22,y:M*0.5},{x:M*0.28,y:M*0.62}],w:180,isSea:true});
+    o.rivers.push({pts:[{x:M*0.72,y:M*0.32},{x:M*0.78,y:M*0.5},{x:M*0.72,y:M*0.66}],w:180,isSea:true});
+    o.rivers.push({pts:[{x:M*0.3,y:M*0.28},{x:M*0.5,y:M*0.22},{x:M*0.7,y:M*0.3}],w:180,isSea:true});
+    o.rivers.push({pts:[{x:M*0.3,y:M*0.65},{x:M*0.5,y:M*0.7},{x:M*0.7,y:M*0.65}],w:180,isSea:true});
+
+    // Uzaktaki ada — denizin ortasında (yüzerek ulaşılır)
+    o.islands=[
+      {x:M*0.5,y:M*0.47,r:220,isComboIsland:true},
+      {x:M*0.42,y:M*0.53,r:100,isComboIsland:true},
+      {x:M*0.58,y:M*0.43,r:90,isComboIsland:true},
+    ];
+
+    // ── TROPİKAL ADA BÖLGESİ (sol üst) ──
+    const tz=o.comboZones.tropical;
+    // Palmiye ağaçları
+    for(let i=0;i<120;i++) o.trees.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,r:28+R()*20,isPalm:true,zone:'tropical'});
+    // Plaj (sahil taşları)
+    for(let i=0;i<80;i++) o.rocks.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,w:15+R()*30,h:10+R()*20,a:R()*Math.PI,isBeach:true});
+    // Küçük tropik havuzlar
+    for(let i=0;i<4;i++) o.rivers.push({pts:[{x:tz.x+R()*tz.w,y:tz.y+R()*tz.h},{x:tz.x+R()*tz.w,y:tz.y+R()*tz.h}],w:80+R()*60,isTropPool:true});
+    // Kulübe (girilebilir)
+    o.buildings=o.buildings||[];
+    for(let i=0;i<5;i++) o.buildings.push({x:tz.x+60+R()*(tz.w-120),y:tz.y+60+R()*(tz.h-120),w:140,h:110,type:'hut',label:'Kulübe',zone:'tropical',color:'#8B5E2A',roof:'#c8a050'});
+    // Vahşi hayvanlar
+    o.wildAnimals=o.wildAnimals||[];
+    for(let i=0;i<8;i++) o.wildAnimals.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,type:['parrot','monkey','turtle'][i%3],zone:'tropical',hp:40,alive:true,companion:null,phase:R()*Math.PI*2});
+    // Mağaralar
+    for(let i=0;i<3;i++) o.caves.push({x:tz.x+R()*tz.w,y:tz.y+R()*tz.h,r:150+R()*80});
+
+    // ── ŞEHİR BÖLGESİ (sağ üst) ──
+    const cz=o.comboZones.city;
+    // Yollar (grid)
+    const roadY1=cz.y+cz.h*0.33, roadY2=cz.y+cz.h*0.66;
+    const roadX1=cz.x+cz.w*0.33, roadX2=cz.x+cz.w*0.66;
+    o.paths.push({pts:[{x:cz.x,y:roadY1},{x:cz.x+cz.w,y:roadY1}],isRoad:true,roadW:55});
+    o.paths.push({pts:[{x:cz.x,y:roadY2},{x:cz.x+cz.w,y:roadY2}],isRoad:true,roadW:55});
+    o.paths.push({pts:[{x:roadX1,y:cz.y},{x:roadX1,y:cz.y+cz.h}],isRoad:true,roadW:55});
+    o.paths.push({pts:[{x:roadX2,y:cz.y},{x:roadX2,y:cz.y+cz.h}],isRoad:true,roadW:55});
+    // Binalar (girilebilir)
+    const cityBlocks=[
+      {x:cz.x+40,y:cz.y+40,w:200,h:160,type:'building',label:'Bina',color:'#8090a0',roof:'#607080'},
+      {x:cz.x+280,y:cz.y+40,w:160,h:200,type:'building',label:'Kule',color:'#909aaa',roof:'#506070'},
+      {x:cz.x+480,y:cz.y+50,w:180,h:150,type:'building',label:'Dükkan',color:'#a09080',roof:'#706050'},
+      {x:cz.x+40,y:cz.y+260,w:220,h:170,type:'building',label:'Market',color:'#a0a090',roof:'#707060'},
+      {x:cz.x+300,y:cz.y+280,w:160,h:140,type:'building',label:'Garaj',color:'#8a8a80',roof:'#606060'},
+      {x:cz.x+500,y:cz.y+260,w:190,h:160,type:'building',label:'Otel',color:'#b0a090',roof:'#806040'},
+      {x:cz.x+60,y:cz.y+480,w:170,h:150,type:'building',label:'Okul',color:'#b0c0a0',roof:'#708060'},
+      {x:cz.x+280,y:cz.y+480,w:200,h:160,type:'building',label:'Hastane',color:'#d0d0d0',roof:'#c03030'},
+      {x:cz.x+510,y:cz.y+490,w:160,h:140,type:'building',label:'Karakol',color:'#90a070',roof:'#506030'},
+    ];
+    cityBlocks.forEach(b=>o.buildings.push({...b,zone:'city'}));
+    // Arabalar
+    o.cars=o.cars||[];
+    const carColors=['#e03030','#3060e0','#e0c030','#30c060','#e06020','#8030e0'];
+    for(let i=0;i<18;i++){
+      const onRoadH=R()<0.5;
+      const roadY=onRoadH?(R()<0.5?roadY1:roadY2):(R()<0.5?roadX1:roadX2);
+      o.cars.push({
+        x:onRoadH?cz.x+R()*cz.w:roadY,
+        y:onRoadH?roadY:cz.y+R()*cz.h,
+        angle:onRoadH?0:Math.PI/2,
+        color:carColors[i%carColors.length],
+        speed:0,maxSpeed:5,
+        isParked:true,driver:null,zone:'city'
+      });
+    }
+    // Şehir ağaçları (kaldırım)
+    for(let i=0;i<40;i++) o.trees.push({x:cz.x+R()*cz.w,y:cz.y+R()*cz.h,r:16+R()*10,isCity:true,zone:'city'});
+    // Vahşi hayvanlar (şehirde kaçak)
+    for(let i=0;i<4;i++) o.wildAnimals.push({x:cz.x+R()*cz.w,y:cz.y+R()*cz.h,type:'dog',zone:'city',hp:35,alive:true,companion:null,phase:R()*Math.PI*2});
+
+    // ── VOLKAN BÖLGESİ (orta) ──
+    const vz=o.comboZones.volcano;
+    // Volkan dağı merkezi
+    o.volcano={x:vz.x+vz.w*0.5,y:vz.y+vz.h*0.45,r:280,active:true};
+    // Lav nehirleri
+    const lavaCx=vz.x+vz.w*0.5,lavaCy=vz.y+vz.h*0.45;
+    [[0.2,0.8],[0.8,0.7],[0.5,0.95],[0.1,0.6],[0.9,0.4]].forEach(([dx,dy])=>{
+      o.rivers.push({pts:[{x:lavaCx,y:lavaCy},{x:vz.x+vz.w*dx,y:vz.y+vz.h*dy}],w:40+R()*30,isLava:true});
+    });
+    // Yanmış ağaçlar
+    for(let i=0;i<60;i++) o.trees.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,r:14+R()*12,isBurnt:true,zone:'volcano'});
+    // Volkanik taşlar
+    for(let i=0;i<120;i++) o.rocks.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,w:20+R()*50,h:14+R()*36,a:R()*Math.PI,isVolcanic:true});
+    // Mağaralar (volkanik)
+    for(let i=0;i<4;i++) o.caves.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,r:160+R()*80,isVolcanic:true});
+    // Vahşi hayvanlar (ateş yaratıkları)
+    for(let i=0;i<5;i++) o.wildAnimals.push({x:vz.x+R()*vz.w,y:vz.y+R()*vz.h,type:'firebird',zone:'volcano',hp:60,alive:true,companion:null,phase:R()*Math.PI*2});
+
+    // ── ÇÖL BÖLGESİ (sol alt) ──
+    const dz=o.comboZones.desert;
+    // Kaktüsler
+    for(let i=0;i<100;i++) o.trees.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,r:16+R()*14,isCactus:true,zone:'desert'});
+    // Kum tepeleri (büyük taşlar gibi)
+    for(let i=0;i<60;i++) o.rocks.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,w:60+R()*120,h:20+R()*40,a:R()*0.3,isSandDune:true});
+    // Piramitler
+    o.pyramids=[
+      {x:dz.x+dz.w*0.25,y:dz.y+dz.h*0.35,r:200},
+      {x:dz.x+dz.w*0.65,y:dz.y+dz.h*0.25,r:140},
+      {x:dz.x+dz.w*0.5,y:dz.y+dz.h*0.72,r:110},
+    ];
+    // Vaha (küçük su havuzları)
+    for(let i=0;i<4;i++) o.rivers.push({pts:[{x:dz.x+80+R()*(dz.w-160),y:dz.y+80+R()*(dz.h-160)},{x:dz.x+80+R()*(dz.w-160),y:dz.y+80+R()*(dz.h-160)}],w:70+R()*50,isOasis:true});
+    // Çöl hayvanları
+    for(let i=0;i<7;i++) o.wildAnimals.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,type:['camel','scorpion','snake'][i%3],zone:'desert',hp:45,alive:true,companion:null,phase:R()*Math.PI*2});
+    // Çöl binası (piramit girişi / çadır)
+    for(let i=0;i<3;i++) o.buildings.push({x:dz.x+80+R()*(dz.w-160),y:dz.y+80+R()*(dz.h-160),w:120,h:100,type:'tent',label:'Çadır',zone:'desert',color:'#c8a060',roof:'#e0b870'});
+    // Mağara (piramit içi)
+    for(let i=0;i<3;i++) o.caves.push({x:dz.x+R()*dz.w,y:dz.y+R()*dz.h,r:130+R()*70});
+
+    // ── KAR/BUZ BÖLGESİ (sağ alt) ──
+    const iz=o.comboZones.ice;
+    // Kar ağaçları (çam)
+    for(let i=0;i<90;i++) o.trees.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,r:20+R()*16,isSnow:true,zone:'ice'});
+    // Buz taşları
+    for(let i=0;i<80;i++) o.rocks.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,w:18+R()*40,h:12+R()*28,a:R()*Math.PI,isIce:true});
+    // Donmuş göl
+    o.rivers.push({pts:[{x:iz.x+iz.w*0.3,y:iz.y+iz.h*0.4},{x:iz.x+iz.w*0.7,y:iz.y+iz.h*0.4},{x:iz.x+iz.w*0.7,y:iz.y+iz.h*0.7},{x:iz.x+iz.w*0.3,y:iz.y+iz.h*0.7}],w:120,isFrozen:true});
+    // Igloo'lar (girilebilir)
+    for(let i=0;i<6;i++) o.buildings.push({x:iz.x+80+R()*(iz.w-160),y:iz.y+80+R()*(iz.h-160),w:120,h:100,type:'igloo',label:'Igloo',zone:'ice',color:'#d0e8f0',roof:'#e8f4ff'});
+    // Buz hayvanları
+    for(let i=0;i<7;i++) o.wildAnimals.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,type:['penguin','polarbear','seal'][i%3],zone:'ice',hp:50,alive:true,companion:null,phase:R()*Math.PI*2});
+    // Kar mağaraları
+    for(let i=0;i<3;i++) o.caves.push({x:iz.x+R()*iz.w,y:iz.y+R()*iz.h,r:140+R()*80,isIceCave:true});
+
+    // ── ORTAK COMBO NESNELER ──
+    // Bölgeler arası yollar
+    o.paths.push({pts:[{x:M*0.27,y:M*0.27},{x:M*0.35,y:M*0.35}],isRoad:true,roadW:40}); // tropikal→volkan
+    o.paths.push({pts:[{x:M*0.65,y:M*0.28},{x:M*0.58,y:M*0.38}],isRoad:true,roadW:40}); // şehir→volkan
+    o.paths.push({pts:[{x:M*0.38,y:M*0.65},{x:M*0.28,y:M*0.65}],isRoad:true,roadW:40}); // volkan→çöl
+    o.paths.push({pts:[{x:M*0.62,y:M*0.65},{x:M*0.72,y:M*0.65}],isRoad:true,roadW:40}); // volkan→buz
+    // Köprüler (adaya)
+    o.bridges=[
+      {x:M*0.38,y:M*0.47,a:0,w:120},
+      {x:M*0.5,y:M*0.38,a:Math.PI/2,w:100},
+    ];
+    // Genel kütükler ve çalılar
+    for(let i=0;i<200;i++) o.logs.push({x:R()*MAP,y:R()*MAP,w:50+R()*70,a:R()*Math.PI});
+    for(let i=0;i<300;i++) o.bushes.push({x:R()*MAP,y:R()*MAP,r:10+R()*16});
+  }
+
   // eşyalar
   for(let i=0;i<160;i++){const t=R()<0.1?'gold':R()<0.33?'silver':'bronze';const w=WEAPONS[Math.floor(R()*3)];items.push({x:R()*MAP,y:R()*MAP,type:'weapon',wid:WEAPONS.indexOf(w),weapon:w,tier:t,picked:false});}
   for(let i=0;i<80;i++) items.push({x:R()*MAP,y:R()*MAP,type:'health',picked:false,heal:30});
@@ -1517,9 +1689,15 @@ function startGame(mode){
   camMode=document.getElementById('camSel').value;
   genMap(curMap);
   const c=selChar;
-  player={x:MAP/2+Math.random()*400-200,y:MAP/2+Math.random()*400-200,char:c,hp:c.hp||110,maxHp:c.hp||110,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0};
-  spawnBots(29);
-  aliveN=30;kills=0;superCd=0;isSubmerged=false;inCave=false;dimension='surface';
+  const isCombo=curMap==='combo';
+  const baseHp=isCombo?(c.hp||110)*2:(c.hp||110);
+  player={x:MAP/2+Math.random()*400-200,y:MAP/2+Math.random()*400-200,char:c,hp:baseHp,maxHp:baseHp,spd:c.spd||3.2,angle:0,alive:true,weapons:[],activeW:0,team:gameMode==='team'?'A':null,superActive:false,flying:false,frozen:0,companions:[]};
+  const botCount=isCombo?99:29;
+  spawnBots(botCount);
+  aliveN=botCount+1;kills=0;superCd=0;isSubmerged=false;inCave=false;dimension='surface';
+  // Combo: vahşi hayvanlar global listesi
+  wildAnimals=(mapObjects.wildAnimals||[]).map(a=>({...a,id:Math.random()}));
+  captureBtn=document.getElementById('captureBtn')||createCaptureBtn();
   initFish();genCaveMap();genUwMap();
   safeZone={x:MAP/2,y:MAP/2,r:MAP*0.47};szTimer=700;
   // Paraşütle iniş başlat
@@ -1704,6 +1882,7 @@ function update(dt){
   player.hidden = inBush||inTree;
   if(superCd>0)superCd-=dt;
   document.getElementById('supCd').textContent=superCd>0?Math.ceil(superCd/60)+'s':'';
+  updateWildAnimals(dt);
   szTimer-=dt;
   if(szTimer<=0)safeZone.r=Math.max(200,safeZone.r-0.3*dt);
   const pdx=player.x-safeZone.x,pdy=player.y-safeZone.y;
@@ -1865,6 +2044,74 @@ function exitDimension(){
   camMode=prevCamMode;
   document.getElementById('camBtn').textContent='📷 '+(camMode==='iso'?'Zooba':camMode==='top'?'Üstten':camMode==='third'?'3. Şahıs':'1. Şahıs');
   for(let i=0;i<16;i++) particles.push({x:player.x+(Math.random()-.5)*40,y:player.y+(Math.random()-.5)*30,vx:(Math.random()-.5)*4,vy:-Math.random()*3,life:30,col:'rgba(255,220,80,0.9)',r:4+Math.random()*5});
+}
+
+function createCaptureBtn(){
+  return document.getElementById('captureBtn');
+}
+
+function doCapture(){
+  if(!player.alive||curMap!=='combo')return;
+  // En yakın yakalanabilir vahşi hayvanı bul
+  const near=wildAnimals.filter(a=>a.alive&&!a.captured).find(a=>{
+    const dx=a.x-player.x,dy=a.y-player.y;
+    return Math.sqrt(dx*dx+dy*dy)<200;
+  });
+  if(!near)return;
+  near.captured=true;
+  near.owner='player';
+  player.companions=player.companions||[];
+  player.companions.push(near);
+  // Partiküller
+  for(let i=0;i<16;i++) particles.push({x:near.x+(Math.random()-0.5)*40,y:near.y+(Math.random()-0.5)*40,vx:(Math.random()-0.5)*5,vy:-Math.random()*4-1,life:30,col:'rgba(255,200,0,0.9)',r:3+Math.random()*4});
+  const btn=document.getElementById('captureBtn');
+  if(btn){btn.style.display='none';}
+  // Bildirim
+  addKillMsg(`🤝 ${near.type} yakalandı! Yardımcın oldu!`);
+}
+
+function updateWildAnimals(dt){
+  if(curMap!=='combo')return;
+  let nearFound=false;
+  wildAnimals.forEach(a=>{
+    if(!a.alive)return;
+    if(a.captured&&a.owner==='player'){
+      // Oyuncuyu takip et
+      const dx=player.x-a.x, dy=player.y-a.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>80){const spd=3*dt;a.x+=dx/dist*spd;a.y+=dy/dist*spd;}
+      // Yakın bota saldır
+      bots.forEach(b=>{
+        if(!b.alive)return;
+        const bx=b.x-a.x,by=b.y-a.y;
+        const bd=Math.sqrt(bx*bx+by*by);
+        if(bd<120){b.hp-=0.4*dt;if(b.hp<=0){b.alive=false;kills++;aliveN--;addKillMsg(`💀 ${a.type} ${b.char.n}'ı yendi!`);}}
+      });
+      return;
+    }
+    // Serbest hayvan — yavaşça dolaş
+    a.phase=(a.phase||0)+0.008*dt;
+    a.x+=Math.cos(a.phase)*0.5*dt;
+    a.y+=Math.sin(a.phase)*0.5*dt;
+    a.x=Math.max(10,Math.min(MAP-10,a.x));
+    a.y=Math.max(10,Math.min(MAP-10,a.y));
+    // Oyuncuya yakınlık kontrolü
+    const dx=a.x-player.x, dy=a.y-player.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist<200)nearFound=true;
+  });
+  // YAKALA butonu
+  const btn=document.getElementById('captureBtn');
+  if(btn) btn.style.display=(nearFound&&player.alive)?'block':'none';
+}
+
+function addKillMsg(msg){
+  const feed=document.getElementById('kfeed');
+  if(!feed)return;
+  const el=document.createElement('div');
+  el.className='km';el.textContent=msg;
+  feed.appendChild(el);
+  setTimeout(()=>el.remove(),3000);
 }
 
 function doDive(){
@@ -2118,7 +2365,7 @@ function dieDie(){player.alive=false;document.getElementById('dInfo').textConten
 function checkWin(){if(bots.filter(b=>b.alive&&!b.isWolfBot).length===0&&player.alive){document.getElementById('wInfo').textContent=kills+' düşman öldürdün!';document.getElementById('winS').style.display='flex';gState='won';}}
 
 // ── RENDER ────────────────────────────────────────────────
-function render(){
+function render2D(){
   if(!ctx)return;
   const W=canvas.width,H=canvas.height;
   ctx.clearRect(0,0,W,H);
@@ -2129,6 +2376,14 @@ function render(){
   else if(camMode==='third')renderThird(W,H);
   else renderFirst(W,H);
   renderMM();
+}
+function render(){
+  if(three.renderer){render3D();}
+  else{render2D();}
+  if(player&&player.alive){
+    const hpF=document.getElementById('hpF');
+    if(hpF)hpF.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
+  }
 }
 
 // Sadece görünür alandaki nesneleri çiz
@@ -2838,39 +3093,235 @@ function isoTree(cx2,cy2,r,treeCol,treeDark,trunkCol){
 
 function renderIso(W,H){
   const p=mapPal;
-  // Zemin — düz yeşil Zooba gibi
   const baseGreen=p.g1||'#5aaa3a';
   ctx.fillStyle=baseGreen;ctx.fillRect(0,0,W,H);
-  // Hafif doku — ızgara benzeri ton farkı
   ctx.fillStyle='rgba(0,0,0,0.04)';
   for(let i=0;i<W;i+=60){ctx.fillRect(i,0,30,H);}
   for(let j=0;j<H;j+=60){ctx.fillRect(0,j,W,30);}
+
+  // ── COMBO HARİTASI ÖZEL ZEMİNLER ──
+  if(curMap==='combo'&&mapObjects.comboZones){
+    const zones=mapObjects.comboZones;
+    const zoneStyles={
+      tropical:{col:'#3aaa28',border:'#2a8a18'},
+      city:    {col:'#8a9090',border:'#606870'},
+      volcano: {col:'#6a3010',border:'#8a2000'},
+      desert:  {col:'#d4a840',border:'#b08820'},
+      ice:     {col:'#c8e4f4',border:'#a0c8e0'},
+    };
+    Object.entries(zones).forEach(([name,z])=>{
+      const st=zoneStyles[name];
+      if(!st)return;
+      const tl=isoProject(z.x,z.y);
+      const tr=isoProject(z.x+z.w,z.y);
+      const br=isoProject(z.x+z.w,z.y+z.h);
+      const bl=isoProject(z.x,z.y+z.h);
+      ctx.fillStyle=st.col;
+      ctx.beginPath();ctx.moveTo(tl.x,tl.y);ctx.lineTo(tr.x,tr.y);ctx.lineTo(br.x,br.y);ctx.lineTo(bl.x,bl.y);ctx.closePath();ctx.fill();
+      ctx.strokeStyle=st.border;ctx.lineWidth=3;ctx.stroke();
+      // Bölge ismi
+      const mx=isoProject(z.x+z.w/2,z.y+z.h/2);
+      ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+      const labels={tropical:'🌴 TROPİKAL',city:'🏙️ ŞEHİR',volcano:'🌋 VOLKAN',desert:'🏜️ ÇÖL',ice:'❄️ KAR/BUZ'};
+      ctx.fillText(labels[name]||name,mx.x,mx.y);
+    });
+
+    // Orta deniz
+    ctx.fillStyle='#1a6890';
+    const seaPts=mapObjects.sea&&mapObjects.sea.pts;
+    if(seaPts&&seaPts.length>2){
+      ctx.beginPath();seaPts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#0a4060';ctx.lineWidth=4;ctx.stroke();
+      // Dalga animasyonu
+      ctx.strokeStyle=`rgba(100,200,255,${0.2+Math.sin(Date.now()*0.002)*0.1})`;ctx.lineWidth=8;ctx.setLineDash([20,15]);
+      ctx.beginPath();seaPts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.closePath();ctx.stroke();ctx.setLineDash([]);
+    }
+
+    // Adalar (ortadaki)
+    (mapObjects.islands||[]).forEach(isl=>{
+      if(!isl.isComboIsland)return;
+      const ip=isoProject(isl.x,isl.y);
+      ctx.fillStyle='#c8b060';ctx.beginPath();ctx.ellipse(ip.x,ip.y,isl.r*0.9*1.1,isl.r*0.52*1.1,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#5aaa30';ctx.beginPath();ctx.ellipse(ip.x,ip.y,isl.r*0.7*1.1,isl.r*0.4*1.1,0,0,Math.PI*2);ctx.fill();
+    });
+
+    // Piramitler
+    (mapObjects.pyramids||[]).forEach(py=>{
+      const ip=isoProject(py.x,py.y);
+      const r=py.r*1.1;
+      // Gölge
+      ctx.fillStyle='rgba(0,0,0,0.25)';ctx.beginPath();ctx.ellipse(ip.x+r*0.2,ip.y+r*0.1,r*1.1,r*0.35,0,0,Math.PI*2);ctx.fill();
+      // Sol yüz
+      ctx.fillStyle='#c8a030';ctx.beginPath();ctx.moveTo(ip.x,ip.y-r*0.9);ctx.lineTo(ip.x-r,ip.y+r*0.2);ctx.lineTo(ip.x,ip.y+r*0.1);ctx.closePath();ctx.fill();
+      // Sağ yüz
+      ctx.fillStyle='#e0b840';ctx.beginPath();ctx.moveTo(ip.x,ip.y-r*0.9);ctx.lineTo(ip.x+r,ip.y+r*0.2);ctx.lineTo(ip.x,ip.y+r*0.1);ctx.closePath();ctx.fill();
+      // Kenar çizgisi
+      ctx.strokeStyle='#a08020';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(ip.x,ip.y-r*0.9);ctx.lineTo(ip.x-r,ip.y+r*0.2);ctx.lineTo(ip.x+r,ip.y+r*0.2);ctx.closePath();ctx.stroke();
+    });
+
+    // Volkan
+    if(mapObjects.volcano){
+      const v=mapObjects.volcano;
+      const vp=isoProject(v.x,v.y);
+      const vr=v.r*1.1;
+      // Dağ gövdesi
+      ctx.fillStyle='#4a2808';ctx.beginPath();ctx.moveTo(vp.x,vp.y-vr*1.1);ctx.lineTo(vp.x-vr*1.2,vp.y+vr*0.4);ctx.lineTo(vp.x+vr*1.2,vp.y+vr*0.4);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#6a3a10';ctx.beginPath();ctx.moveTo(vp.x,vp.y-vr*1.1);ctx.lineTo(vp.x-vr*0.3,vp.y-vr*0.1);ctx.lineTo(vp.x+vr*1.2,vp.y+vr*0.4);ctx.closePath();ctx.fill();
+      // Krater
+      ctx.fillStyle='#ff4400';ctx.beginPath();ctx.ellipse(vp.x,vp.y-vr*0.9,vr*0.22,vr*0.12,0,0,Math.PI*2);ctx.fill();
+      // Lav parlaması
+      const lavPulse=0.6+Math.sin(Date.now()*0.004)*0.4;
+      ctx.fillStyle=`rgba(255,80,0,${lavPulse*0.7})`;ctx.beginPath();ctx.ellipse(vp.x,vp.y-vr*0.92,vr*0.28,vr*0.15,0,0,Math.PI*2);ctx.fill();
+      // Duman
+      for(let i=0;i<3;i++){
+        const smoke=((Date.now()*0.0008+i*0.6)%1);
+        const sy=vp.y-vr*1.1-smoke*60;
+        const sa=0.4*(1-smoke);
+        ctx.fillStyle=`rgba(80,80,80,${sa})`;ctx.beginPath();ctx.arc(vp.x+(i-1)*8,sy,8+smoke*20,0,Math.PI*2);ctx.fill();
+      }
+    }
+
+    // Binalar
+    (mapObjects.buildings||[]).forEach(b=>{
+      const ip=isoProject(b.x,b.y);
+      if(ip.x<-200||ip.x>W+200||ip.y<-200||ip.y>H+200)return;
+      const bw=b.w*1.1*0.9, bh=b.h*1.1*0.45, bd=20;
+      if(b.type==='igloo'){
+        // Igloo — yarım küre
+        ctx.fillStyle='rgba(0,0,0,0.18)';ctx.beginPath();ctx.ellipse(ip.x+6,ip.y+6,bw*0.55,bh*0.7,0,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle=b.color||'#d0e8f0';ctx.beginPath();ctx.arc(ip.x,ip.y,bw*0.5,Math.PI,0);ctx.closePath();ctx.fill();
+        ctx.fillStyle=b.roof||'#e8f4ff';ctx.beginPath();ctx.arc(ip.x,ip.y,bw*0.5,Math.PI,0);ctx.stroke();
+        ctx.fillStyle='#0a2030';ctx.beginPath();ctx.ellipse(ip.x+bw*0.18,ip.y+2,bw*0.1,bh*0.18,0,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText('🏠 '+b.label,ip.x,ip.y-bw*0.55);
+      } else if(b.type==='tent'){
+        // Çadır — üçgen
+        ctx.fillStyle=b.color||'#c8a060';
+        ctx.beginPath();ctx.moveTo(ip.x,ip.y-bh*1.4);ctx.lineTo(ip.x-bw*0.55,ip.y+bh*0.2);ctx.lineTo(ip.x+bw*0.55,ip.y+bh*0.2);ctx.closePath();ctx.fill();
+        ctx.fillStyle=b.roof||'#e0b870';ctx.beginPath();ctx.moveTo(ip.x,ip.y-bh*1.4);ctx.lineTo(ip.x-bw*0.2,ip.y-bh*0.2);ctx.lineTo(ip.x+bw*0.2,ip.y-bh*0.2);ctx.closePath();ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText('⛺ '+b.label,ip.x,ip.y-bh*1.5);
+      } else if(b.type==='hut'){
+        // Kulübe
+        ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(ip.x-bw/2+4,ip.y-bh+4,bw,bh+bd);
+        ctx.fillStyle=b.color||'#8B5E2A';ctx.fillRect(ip.x-bw/2,ip.y-bh,bw,bh+bd);
+        ctx.fillStyle=b.roof||'#c8a050';ctx.beginPath();ctx.moveTo(ip.x-bw/2-8,ip.y-bh);ctx.lineTo(ip.x,ip.y-bh*2);ctx.lineTo(ip.x+bw/2+8,ip.y-bh);ctx.closePath();ctx.fill();
+        ctx.fillStyle='#5a3010';ctx.fillRect(ip.x-bw/10,ip.y-bh/2,bw/5,bh/2+bd);
+        ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText('🛖 '+b.label,ip.x,ip.y-bh*2.1);
+      } else {
+        // Şehir binası
+        isoBlock(ip.x-bw/2,ip.y,bw,bh,bd,b.roof||'#607080',b.color||'#8090a0','#405060');
+        // Pencereler
+        ctx.fillStyle='rgba(255,240,180,0.7)';
+        for(let wi=0;wi<3;wi++) for(let wj=0;wj<2;wj++) ctx.fillRect(ip.x-bw/2+10+wi*(bw/3-4),ip.y-bh+6+wj*14,bw/3-12,10);
+        ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.fillText('🏢 '+b.label,ip.x,ip.y-bh-bd-6);
+      }
+      // GİRİŞ etiketi (kapı)
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.font='8px sans-serif';ctx.fillText('▶ GİR',ip.x,ip.y+bd+2);
+    });
+
+    // Arabalar
+    (mapObjects.cars||[]).forEach(car=>{
+      const cp=isoProject(car.x,car.y);
+      if(cp.x<-100||cp.x>W+100||cp.y<-100||cp.y>H+100)return;
+      ctx.save();ctx.translate(cp.x,cp.y);ctx.rotate(car.angle*0.45);
+      // Gövde
+      ctx.fillStyle=car.color;ctx.fillRect(-20,-10,40,20);
+      // Cam
+      ctx.fillStyle='rgba(180,220,255,0.7)';ctx.fillRect(-12,-8,24,10);
+      // Tekerlekler
+      ctx.fillStyle='#222';[-14,14].forEach(wx=>{[-9,9].forEach(wy=>{ctx.beginPath();ctx.arc(wx,wy,4,0,Math.PI*2);ctx.fill();});});
+      ctx.restore();
+    });
+
+    // Vahşi hayvanlar
+    const animalEmoji={parrot:'🦜',monkey:'🐒',turtle:'🐢',dog:'🐕',firebird:'🔥',camel:'🐪',scorpion:'🦂',snake:'🐍',penguin:'🐧',polarbear:'🐻‍❄️',seal:'🦭'};
+    wildAnimals.forEach(a=>{
+      if(!a.alive)return;
+      const ap=isoProject(a.x,a.y);
+      if(ap.x<-60||ap.x>W+60||ap.y<-60||ap.y>H+60)return;
+      const emoji=animalEmoji[a.type]||'🐾';
+      // Gölge
+      ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.ellipse(ap.x+2,ap.y+4,14,6,0,0,Math.PI*2);ctx.fill();
+      // Emoji
+      ctx.font='22px sans-serif';ctx.textAlign='center';
+      if(a.captured){
+        // Yakalanmış — oyuncunun yanında, yeşil halka
+        ctx.strokeStyle='#00ff88';ctx.lineWidth=2;ctx.beginPath();ctx.arc(ap.x,ap.y-8,14,0,Math.PI*2);ctx.stroke();
+      }
+      ctx.fillText(emoji,ap.x,ap.y);
+      // HP bar
+      const hpPct=a.hp/60;
+      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(ap.x-14,ap.y-24,28,5);
+      ctx.fillStyle=a.captured?'#00ff88':'#ff8800';ctx.fillRect(ap.x-14,ap.y-24,28*hpPct,5);
+    });
+  }
 
   // Güvenli bölge
   const sc=isoProject(safeZone.x,safeZone.y);
   ctx.strokeStyle='rgba(80,220,255,0.6)';ctx.lineWidth=3;ctx.setLineDash([14,8]);
   ctx.beginPath();ctx.ellipse(sc.x,sc.y,safeZone.r*0.8,safeZone.r*0.46,0,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
 
-  // Su havuzları / nehirler — çukur görünümü (koyu teal, Zooba gibi)
+  // Su havuzları / nehirler
   mapObjects.rivers.forEach(r=>{
     if(r.pts.length<2)return;
     const ww=r.isMain?r.w*1.6:r.w*1.1;
-    // Dış kenar (koyu)
+    // Lav nehiri
+    if(r.isLava){
+      const lavPulse=`rgba(${220+Math.floor(Math.sin(Date.now()*0.003)*30)},60,0,0.95)`;
+      ctx.strokeStyle='#3a0800';ctx.lineWidth=ww+12;ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+      ctx.strokeStyle=lavPulse;ctx.lineWidth=ww;
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+      ctx.strokeStyle='rgba(255,200,0,0.4)';ctx.lineWidth=ww*0.3;
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+      return;
+    }
+    // Donmuş göl
+    if(r.isFrozen){
+      ctx.strokeStyle='#6090b0';ctx.lineWidth=ww+10;ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+      ctx.strokeStyle='#a8d8f0';ctx.lineWidth=ww;
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=ww*0.25;ctx.setLineDash([15,10]);
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();ctx.setLineDash([]);
+      return;
+    }
+    // Vaha
+    if(r.isOasis){
+      const op=isoProject(r.pts[0].x,r.pts[0].y);
+      ctx.fillStyle='#1a8860';ctx.beginPath();ctx.ellipse(op.x,op.y,r.w*1.1,r.w*0.55,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(100,220,180,0.3)';ctx.beginPath();ctx.ellipse(op.x,op.y,r.w*0.7,r.w*0.35,0,0,Math.PI*2);ctx.fill();
+      return;
+    }
+    // Tropikal havuz
+    if(r.isTropPool){
+      const op=isoProject(r.pts[0].x,r.pts[0].y);
+      ctx.fillStyle='#2090a0';ctx.beginPath();ctx.ellipse(op.x,op.y,r.w*1.1,r.w*0.55,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(100,220,255,0.35)';ctx.beginPath();ctx.ellipse(op.x,op.y,r.w*0.65,r.w*0.32,0,0,Math.PI*2);ctx.fill();
+      return;
+    }
+    // Normal su
     ctx.strokeStyle='#1a6050';ctx.lineWidth=ww+10;ctx.lineCap='round';ctx.lineJoin='round';
     ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
-    // Su rengi — Zooba teal
-    ctx.strokeStyle='#2a9070';ctx.lineWidth=ww;
+    ctx.strokeStyle=r.isSea?'#1a6890':'#2a9070';ctx.lineWidth=ww;
     ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
-    // Yansıma
     ctx.strokeStyle='rgba(120,220,180,0.25)';ctx.lineWidth=ww*0.4;
     ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
   });
 
-  // Yollar — açık toprak rengi
+  // Yollar
   mapObjects.paths.forEach(r=>{
     if(r.pts.length<2)return;
-    ctx.strokeStyle='#c8a860';ctx.lineWidth=24;ctx.lineCap='round';ctx.lineJoin='round';
+    const roadW=r.roadW||24;
+    ctx.strokeStyle=r.isRoad?'#606870':'#c8a860';ctx.lineWidth=roadW;ctx.lineCap='round';ctx.lineJoin='round';
     ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+    if(r.isRoad){
+      // Orta çizgi
+      ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=2;ctx.setLineDash([20,15]);
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();ctx.setLineDash([]);
+    } else {
+      ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=8;
+      ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
+    }
     ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=8;
     ctx.beginPath();r.pts.forEach((pt,i)=>{const ip=isoProject(pt.x,pt.y);i===0?ctx.moveTo(ip.x,ip.y):ctx.lineTo(ip.x,ip.y);});ctx.stroke();
   });
@@ -3003,25 +3454,45 @@ function renderIso(W,H){
     });
   }
 
-  // Kayalar — 3D blok görünümü
+  // Kayalar
   mapObjects.rocks.forEach(r=>{
     if(r.isWater||r.isCageWall)return;
     const ip=isoProject(r.x,r.y);
     if(ip.x<-100||ip.x>W+100||ip.y<-100||ip.y>H+100)return;
     const rw=r.w*0.5,rh=r.h*0.28;
-    const rc=p.rock||'#8a8070';
-    // Gölge
+    if(r.isSandDune){
+      // Kum tepesi
+      ctx.fillStyle='#c8a030';ctx.beginPath();ctx.ellipse(ip.x,ip.y,rw*1.2,rh*0.7,r.a||0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#e0b840';ctx.beginPath();ctx.ellipse(ip.x-rw*0.15,ip.y-rh*0.2,rw*0.8,rh*0.45,r.a||0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,230,150,0.35)';ctx.beginPath();ctx.ellipse(ip.x-rw*0.3,ip.y-rh*0.35,rw*0.4,rh*0.25,r.a||0,0,Math.PI*2);ctx.fill();
+      return;
+    }
+    if(r.isIce){
+      // Buz taşı — mavi parlak
+      ctx.fillStyle='rgba(0,0,0,0.15)';ctx.beginPath();ctx.ellipse(ip.x+2,ip.y+rh*0.5,rw*1.1,rh*0.45,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#80c8e8';ctx.beginPath();ctx.ellipse(ip.x,ip.y,rw*0.9,rh*0.55,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(200,240,255,0.6)';ctx.beginPath();ctx.ellipse(ip.x-rw*0.25,ip.y-rh*0.28,rw*0.4,rh*0.28,0,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(150,210,240,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(ip.x,ip.y,rw*0.9,rh*0.55,0,0,Math.PI*2);ctx.stroke();
+      return;
+    }
+    if(r.isVolcanic){
+      // Volkanik taş — koyu kırmızımsı
+      const rc2='#5a2808';
+      ctx.fillStyle='rgba(0,0,0,0.25)';ctx.beginPath();ctx.ellipse(ip.x+rw*0.2,ip.y+rh*0.5,rw*1.1,rh*0.5,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=rc2+'bb';ctx.beginPath();ctx.ellipse(ip.x,ip.y+rh*0.3,rw,rh*0.6,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=rc2;ctx.beginPath();ctx.ellipse(ip.x,ip.y,rw*0.9,rh*0.55,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,80,0,0.2)';ctx.beginPath();ctx.ellipse(ip.x-rw*0.2,ip.y-rh*0.2,rw*0.35,rh*0.28,0,0,Math.PI*2);ctx.fill();
+      return;
+    }
+    // Normal kaya
+    const rc=r.isBeach?'#a09070':(p.rock||'#8a8070');
     ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.ellipse(ip.x+rw*0.2,ip.y+rh*0.6,rw*1.1,rh*0.5,0,0,Math.PI*2);ctx.fill();
-    // Ana kaya — alt yüz
     ctx.fillStyle=rc+'bb';ctx.beginPath();ctx.ellipse(ip.x,ip.y+rh*0.3,rw,rh*0.6,0,0,Math.PI*2);ctx.fill();
-    // Üst yüz
     ctx.fillStyle=rc;ctx.beginPath();ctx.ellipse(ip.x,ip.y,rw*0.9,rh*0.55,0,0,Math.PI*2);ctx.fill();
-    // 3D yükseklik
     if(r.tall){
       ctx.fillStyle=rc+'cc';ctx.beginPath();ctx.ellipse(ip.x,ip.y-rh,rw*0.6,rh*0.8,0,0,Math.PI*2);ctx.fill();
       ctx.fillStyle=rc;ctx.beginPath();ctx.ellipse(ip.x,ip.y-rh*1.6,rw*0.5,rh*0.55,0,0,Math.PI*2);ctx.fill();
     }
-    // Işık vurgusu
     ctx.fillStyle='rgba(255,255,255,0.18)';ctx.beginPath();ctx.ellipse(ip.x-rw*0.22,ip.y-rh*0.25,rw*0.38,rh*0.3,0,0,Math.PI*2);ctx.fill();
   });
 
@@ -3062,7 +3533,42 @@ function renderIso(W,H){
     if(ent.type==='tree'){
       const t=ent.obj;
       const tr=t.r*1.6;
-      isoTree(ip.x,ip.y,tr,p.tree||'#3a8820',p.tree2||'#2a6810','#5a3010');
+      if(t.isCactus){
+        // Kaktüs
+        ctx.fillStyle='#2a7030';
+        ctx.fillRect(ip.x-tr*0.1,ip.y-tr*0.9,tr*0.2,tr*0.9);
+        ctx.fillRect(ip.x-tr*0.4,ip.y-tr*0.55,tr*0.3,tr*0.15);
+        ctx.fillRect(ip.x+tr*0.1,ip.y-tr*0.45,tr*0.3,tr*0.15);
+        ctx.fillRect(ip.x-tr*0.4,ip.y-tr*0.7,tr*0.1,tr*0.18);
+        ctx.fillRect(ip.x+tr*0.3,ip.y-tr*0.6,tr*0.1,tr*0.18);
+        ctx.fillStyle='#3a9040';ctx.beginPath();ctx.arc(ip.x,ip.y-tr*0.9,tr*0.12,0,Math.PI*2);ctx.fill();
+      } else if(t.isBurnt){
+        // Yanmış ağaç
+        ctx.fillStyle='#2a1808';ctx.fillRect(ip.x-tr*0.08,ip.y-tr*0.7,tr*0.16,tr*0.7);
+        ctx.strokeStyle='#3a2010';ctx.lineWidth=2;
+        [[0.3,0.5],[0.5,0.3],[0.4,0.15]].forEach(([ox,oy])=>{
+          ctx.beginPath();ctx.moveTo(ip.x,ip.y-tr*oy);ctx.lineTo(ip.x+tr*ox,ip.y-tr*(oy-0.1));ctx.stroke();
+          ctx.beginPath();ctx.moveTo(ip.x,ip.y-tr*oy);ctx.lineTo(ip.x-tr*ox,ip.y-tr*(oy-0.1));ctx.stroke();
+        });
+      } else if(t.isSnow){
+        // Karlı çam
+        isoTree(ip.x,ip.y,tr,'#2a6840','#1a4828','#4a3018');
+        // Kar örtüsü
+        ctx.fillStyle='rgba(240,248,255,0.75)';
+        ctx.beginPath();ctx.moveTo(ip.x-tr*0.5,ip.y+tr*0.08);ctx.lineTo(ip.x+tr*0.5,ip.y+tr*0.08);ctx.lineTo(ip.x,ip.y-tr*0.5);ctx.closePath();ctx.fill();
+        ctx.beginPath();ctx.moveTo(ip.x-tr*0.35,ip.y-tr*0.25);ctx.lineTo(ip.x+tr*0.35,ip.y-tr*0.25);ctx.lineTo(ip.x,ip.y-tr*0.85);ctx.closePath();ctx.fill();
+      } else if(t.isPalm){
+        // Palmiye
+        const trunkH=tr*1.4;
+        ctx.fillStyle='#8B6914';ctx.fillRect(ip.x-tr*0.1,ip.y-trunkH,tr*0.2,trunkH);
+        ['#3aaa20','#2a8a10','#4aba28'].forEach((c,i)=>{
+          const a=(i/3)*Math.PI*2+Date.now()*0.0005;
+          ctx.fillStyle=c;ctx.beginPath();
+          ctx.ellipse(ip.x+Math.cos(a)*tr*0.7,ip.y-trunkH+Math.sin(a)*tr*0.3,tr*0.5,tr*0.18,a,0,Math.PI*2);ctx.fill();
+        });
+      } else {
+        isoTree(ip.x,ip.y,tr,p.tree||'#3a8820',p.tree2||'#2a6810','#5a3010');
+      }
     } else if(ent.type==='bot'){
       const b=ent.obj;
       const sz=64;
@@ -4121,20 +4627,6 @@ function render3D(){
   if(mmCtx) renderMM();
 }
 
-// render() fonksiyonunu 3D ile değiştir
-const _origRender=render;
-function render(){
-  if(three.renderer){
-    render3D();
-  } else {
-    _origRender();
-  }
-  // HUD güncelle (HP bar, alive sayısı)
-  if(player&&player.alive){
-    const hpF=document.getElementById('hpF');
-    if(hpF) hpF.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
-  }
-}
 
 buildCharGrid();
 </script>
