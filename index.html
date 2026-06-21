@@ -1712,7 +1712,7 @@ function startGame(mode){
   ctx=canvas.getContext('2d');
   mmCtx=document.getElementById('mmC').getContext('2d');
   document.getElementById('hpLbl').textContent=c.n;
-  init3D();
+  try{init3D();}catch(e){console.warn('3D init failed:',e);}
   updateWSlots();setupJoy();setupInput();
   gState='playing';
   if(rafId)cancelAnimationFrame(rafId);
@@ -2378,8 +2378,13 @@ function render2D(){
   renderMM();
 }
 function render(){
-  if(three.renderer){render3D();}
-  else{render2D();}
+  try{
+    if(three.renderer){render3D();}
+    else{render2D();}
+  }catch(e){
+    three.renderer=null;
+    render2D();
+  }
   if(player&&player.alive){
     const hpF=document.getElementById('hpF');
     if(hpF)hpF.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
