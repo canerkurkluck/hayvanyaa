@@ -1507,23 +1507,184 @@ function doAtk(){
 }
 
 function doSuper(){
-  if(superCd>0||!player.alive)return;
-  superCd=superMax;
+  if(!player.alive)return;
   const id=player.char.id;
+
+  // Vaşak: pusu modunda ikinci basışta ısırma saldırısı
+  if(id==='lynx'){
+    if(player.superActive){
+      // Pusudan çıkıp ısır
+      player.superActive=false;player.hidden=false;
+      addKF('🐱 Vaşak: Pusudan Saldırı!');
+      let hit=false;
+      bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<120){hitE(b,70,true);b.frozen=60;if(!b.alive)onKill(b);hit=true;}});
+      if(!hit)addKF('Hedef yok!');
+      superCd=superMax;
+    } else {
+      if(superCd>0)return;
+      // Pusuya yat — görünmez ol
+      player.superActive=true;player.hidden=true;
+      addKF('🐱 Vaşak: Pusuda — tekrar ✨ bas saldır!');
+      // Süre dolunca otomatik çık
+      setTimeout(()=>{if(player.superActive){player.superActive=false;player.hidden=false;}},5000);
+      superCd=0; // cooldown pusudan çıkınca başlar
+    }
+    return;
+  }
+
+  if(superCd>0)return;
+  superCd=superMax;
   addKF(player.char.n+': '+player.char.sup);
-  if(id==='lion'){bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<180){hitE(b,25,true);b.ai.timer=110;if(!b.alive)onKill(b);}});}
-  else if(id==='wolf'){for(let i=0;i<4;i++){const a=player.angle+(i-1.5)*0.55;const c=CHARS[3];bots.push({x:player.x+Math.cos(a)*90,y:player.y+Math.sin(a)*90,char:c,hp:35,maxHp:35,spd:4.5,angle:0,alive:true,weapons:[],activeW:0,ai:{state:'chase',timer:0,mx:0,my:0},team:null,superCd:999,frozen:0,isWolfBot:true});aliveN++;}}
-  else if(id==='turtle'){player.superActive=true;setTimeout(()=>player.superActive=false,3000);}
-  else if(id==='squirrel'){player.hp=Math.min(player.maxHp,player.hp+50);}
-  else if(id==='penguin'){bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<220){b.frozen=130;}});}
-  else if(id==='eagle'){player.flying=true;player.spd*=2;setTimeout(()=>{player.flying=false;player.spd=player.char.spd||3.2;bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<130){hitE(b,60,true);if(!b.alive)onKill(b);}});},2500);}
-  else if(id==='bat'){bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<140){const s=25;hitE(b,s,true);player.hp=Math.min(player.maxHp,player.hp+s);if(!b.alive)onKill(b);}});}
-  else if(id==='chameleon'){player.superActive=true;setTimeout(()=>player.superActive=false,4500);}
-  else if(id==='parrot'){player.hp=Math.min(player.maxHp,player.hp+40);}
-  else if(id==='elephant'){bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<120){const a=Math.atan2(dy,dx);b.x+=Math.cos(a)*150;b.y+=Math.sin(a)*150;hitE(b,35,true);if(!b.alive)onKill(b);}});}
-  else if(id==='raven'){bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<200){b.frozen=100;}});}
-  else if(id==='cheetah'){player.spd*=3.2;setTimeout(()=>player.spd=player.char.spd||3.2,2200);bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<90){hitE(b,40,true);if(!b.alive)onKill(b);}});}
-  else{bullets.push({x:player.x,y:player.y,angle:player.angle,spd:14,life:80,dmg:60,owner:'player',col:'#ff80ff'});}
+
+  if(id==='lion'){
+    // Kükreme: çevredekileri iter ve hasar verir, sarı dalga efekti
+    bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;const d=Math.sqrt(dx*dx+dy*dy);if(d<200){const a=Math.atan2(dy,dx);b.x+=Math.cos(a)*120;b.y+=Math.sin(a)*120;hitE(b,30,true);b.ai.timer=110;if(!b.alive)onKill(b);}});
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2;particles.push({x:player.x+Math.cos(a)*50,y:player.y+Math.sin(a)*50,vx:Math.cos(a)*5,vy:Math.sin(a)*5,life:30,col:'#f0c040',r:6});}
+
+  } else if(id==='croc'){
+    // Su Dalışı: anında yakın düşmana dalış, suya çeker (yavaşlatır)
+    let closest=null,minD=999;
+    bots.forEach(b=>{if(!b.alive)return;const d=Math.hypot(b.x-player.x,b.y-player.y);if(d<250&&d<minD){minD=d;closest=b;}});
+    if(closest){player.x=closest.x-Math.cos(player.angle)*60;player.y=closest.y-Math.sin(player.angle)*60;hitE(closest,55,true);closest.frozen=90;if(!closest.alive)onKill(closest);}
+    for(let i=0;i<10;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:25,col:'#4080ff',r:5});
+
+  } else if(id==='wolf'){
+    // Kurt Sürüsü: 4 kurt çağır
+    for(let i=0;i<4;i++){const a=player.angle+(i-1.5)*0.55;const c=CHARS[3];bots.push({x:player.x+Math.cos(a)*90,y:player.y+Math.sin(a)*90,char:c,hp:35,maxHp:35,spd:4.5,angle:0,alive:true,weapons:[],activeW:0,ai:{state:'chase',timer:0,mx:0,my:0},team:null,superCd:999,frozen:0,isWolfBot:true});aliveN++;}
+
+  } else if(id==='squirrel'){
+    // Can Yenile + hız patlaması
+    player.hp=Math.min(player.maxHp,player.hp+60);player.spd*=2.5;
+    setTimeout(()=>player.spd=player.char.spd||3.2,2000);
+    for(let i=0;i<8;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:20,col:'#80ff80',r:4});
+
+  } else if(id==='turtle'){
+    // Kalkan: hasar almaz + çevresindekilere zırh kırma
+    player.superActive=true;
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2;particles.push({x:player.x+Math.cos(a)*40,y:player.y+Math.sin(a)*40,vx:0,vy:0,life:50,col:'#40c080',r:5});}
+    setTimeout(()=>player.superActive=false,3500);
+
+  } else if(id==='giraffe'){
+    // Uzak Nişan: 3 yüksek hasarlı ok atar
+    for(let i=-1;i<=1;i++){const a=player.angle+i*0.18;bullets.push({x:player.x,y:player.y,angle:a,spd:14,life:90,dmg:55,owner:'player',col:'#f0c840'});}
+
+  } else if(id==='panda'){
+    // Yuvarlan: düşmanları ezerek geç
+    player.spd*=4;player.superActive=true;
+    setTimeout(()=>{player.superActive=false;player.spd=player.char.spd||3.2;},1800);
+    bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<80){hitE(b,45,true);if(!b.alive)onKill(b);}});
+
+  } else if(id==='penguin'){
+    // Kartopu: çevreyi dondurur, buz parçacıkları
+    bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<220){b.frozen=150;}});
+    for(let i=0;i<16;i++){const a=i/16*Math.PI*2;particles.push({x:player.x+Math.cos(a)*30,y:player.y+Math.sin(a)*30,vx:Math.cos(a)*4,vy:Math.sin(a)*4,life:35,col:'#a0e8ff',r:5});}
+
+  } else if(id==='shark'){
+    // Dalış: su altından çıkıp en yakın 3 düşmana saldır
+    player.hidden=true;
+    setTimeout(()=>{
+      player.hidden=false;
+      let targets=[];
+      bots.forEach(b=>{if(!b.alive)return;targets.push({b,d:Math.hypot(b.x-player.x,b.y-player.y)});});
+      targets.sort((a,b)=>a.d-b.d);
+      targets.slice(0,3).forEach(t=>{hitE(t.b,65,true);if(!t.b.alive)onKill(t.b);});
+      for(let i=0;i<14;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*7,vy:(Math.random()-0.5)*7,life:28,col:'#2060ff',r:6});
+    },1200);
+
+  } else if(id==='tiger'){
+    // Pençe: önüne büyük kesim saldırısı, 3 kesim çizgisi
+    for(let i=-1;i<=1;i++){const a=player.angle+i*0.3;const tx=player.x+Math.cos(a)*130,ty=player.y+Math.sin(a)*130;bots.forEach(b=>{if(!b.alive)return;if(Math.hypot(b.x-tx,b.y-ty)<70){hitE(b,60,true);if(!b.alive)onKill(b);}});}
+    for(let i=0;i<10;i++)particles.push({x:player.x+Math.cos(player.angle)*80,y:player.y+Math.sin(player.angle)*80,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:22,col:'#ff8020',r:5});
+
+  } else if(id==='eagle'){
+    // Uçuş: havaya kalk, hız x2, iniş hasarı
+    player.flying=true;player.spd*=2;
+    for(let i=0;i<8;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*6,vy:-Math.random()*5,life:25,col:'#ffe080',r:4});
+    setTimeout(()=>{player.flying=false;player.spd=player.char.spd||3.2;bots.forEach(b=>{if(!b.alive)return;if(Math.hypot(b.x-player.x,b.y-player.y)<130){hitE(b,65,true);if(!b.alive)onKill(b);}});for(let i=0;i<12;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*7,vy:(Math.random()-0.5)*7,life:30,col:'#ffe080',r:6});},2500);
+
+  } else if(id==='chameleon'){
+    // Kamufle: tamamen görünmez, hareket ederken de gizli
+    player.superActive=true;player.hidden=true;
+    for(let i=0;i<8;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:20,col:'#80ff80',r:3});
+    setTimeout(()=>{player.superActive=false;player.hidden=false;},4500);
+
+  } else if(id==='bat'){
+    // Can Em: etraftakilerin canını emer
+    bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<160){const s=30;hitE(b,s,true);player.hp=Math.min(player.maxHp,player.hp+s);if(!b.alive)onKill(b);}});
+    for(let i=0;i<8;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:20,col:'#c040ff',r:4});
+
+  } else if(id==='raven'){
+    // Karanlık: çevreyi karartır ve dondurur
+    bots.forEach(b=>{if(!b.alive)return;if(Math.hypot(b.x-player.x,b.y-player.y)<220){b.frozen=120;}});
+    for(let i=0;i<14;i++){const a=i/14*Math.PI*2;particles.push({x:player.x+Math.cos(a)*40,y:player.y+Math.sin(a)*40,vx:Math.cos(a)*3,vy:Math.sin(a)*3,life:30,col:'#6020a0',r:5});}
+
+  } else if(id==='anteater'){
+    // Dil: uzun dil fırlatır, 3 saniyelik zincir
+    const tx=player.x+Math.cos(player.angle)*200,ty=player.y+Math.sin(player.angle)*200;
+    bullets.push({x:player.x,y:player.y,angle:player.angle,spd:12,life:18,dmg:50,owner:'player',col:'#e080a0',r:8});
+    // Dil geri gelir efekti
+    for(let i=0;i<6;i++)setTimeout(()=>particles.push({x:player.x+Math.cos(player.angle)*i*30,y:player.y+Math.sin(player.angle)*i*30,vx:0,vy:0,life:15,col:'#e080a0',r:6}),i*40);
+
+  } else if(id==='parrot'){
+    // İyileştir: can yenile + yakın arkadaşları da iyileştirir
+    player.hp=Math.min(player.maxHp,player.hp+50);
+    for(let i=0;i<10;i++)particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:25,col:'#40ff80',r:5});
+
+  } else if(id==='flamingo'){
+    // Hız: tek bacak üstünde dönerek çevreye hasar + hız artışı
+    player.spd*=2.8;
+    bots.forEach(b=>{if(!b.alive)return;if(Math.hypot(b.x-player.x,b.y-player.y)<150){hitE(b,35,true);if(!b.alive)onKill(b);}});
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2;particles.push({x:player.x+Math.cos(a)*60,y:player.y+Math.sin(a)*60,vx:Math.cos(a)*4,vy:Math.sin(a)*4,life:28,col:'#ff80c0',r:5});}
+    setTimeout(()=>player.spd=player.char.spd||3.2,2000);
+
+  } else if(id==='beaver'){
+    // Barikat: önüne ahşap barikat koy (kaya olarak)
+    const bx=player.x+Math.cos(player.angle)*80,by=player.y+Math.sin(player.angle)*80;
+    mapObjects.rocks.push({x:bx,y:by,w:60,h:30,a:player.angle,isBarricade:true});
+    for(let i=0;i<8;i++)particles.push({x:bx,y:by,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:20,col:'#8B4513',r:5});
+
+  } else if(id==='elephant'){
+    // Hortum: çevredekileri büyük çaplı savurur
+    bots.forEach(b=>{if(!b.alive)return;const dx=b.x-player.x,dy=b.y-player.y;if(Math.sqrt(dx*dx+dy*dy)<150){const a=Math.atan2(dy,dx);b.x+=Math.cos(a)*200;b.y+=Math.sin(a)*200;hitE(b,45,true);if(!b.alive)onKill(b);}});
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2;particles.push({x:player.x+Math.cos(a)*50,y:player.y+Math.sin(a)*50,vx:Math.cos(a)*5,vy:Math.sin(a)*5,life:25,col:'#a0a0c0',r:6});}
+
+  } else if(id==='llama'){
+    // Tükürük: geniş alan tükürük — yavaşlatır
+    for(let i=-2;i<=2;i++){const a=player.angle+i*0.25;bullets.push({x:player.x,y:player.y,angle:a,spd:9,life:50,dmg:20,owner:'player',col:'#a0d060',freeze:80});}
+
+  } else if(id==='zebra'){
+    // Aldatma: sahte kopyalar oluştur, düşmanları şaşırt
+    for(let i=0;i<3;i++){const a=Math.random()*Math.PI*2;const fx=player.x+Math.cos(a)*120,fy=player.y+Math.sin(a)*120;for(let j=0;j<5;j++)particles.push({x:fx,y:fy,vx:(Math.random()-0.5)*3,vy:(Math.random()-0.5)*3,life:60,col:player.char.col,r:8});}
+    // Gerçek oyuncuyu geçici gizle
+    player.hidden=true;setTimeout(()=>player.hidden=false,3000);
+
+  } else if(id==='cardinal'){
+    // Kalkan+Hız: kırmızı zırh + hız
+    player.superActive=true;player.spd*=1.8;
+    for(let i=0;i<10;i++){const a=i/10*Math.PI*2;particles.push({x:player.x+Math.cos(a)*35,y:player.y+Math.sin(a)*35,vx:0,vy:0,life:45,col:'#ff2020',r:5});}
+    setTimeout(()=>{player.superActive=false;player.spd=player.char.spd||3.2;},3000);
+
+  } else if(id==='hedgehog'){
+    // Diken Topu: yuvarlan, çevreye diken fırlat
+    for(let i=0;i<16;i++){const a=i/16*Math.PI*2;bullets.push({x:player.x,y:player.y,angle:a,spd:7,life:35,dmg:30,owner:'player',col:'#808040'});}
+    player.superActive=true;setTimeout(()=>player.superActive=false,1500);
+
+  } else if(id==='leopard'){
+    // Ağaçtan At: havaya sıçra, hedef üstüne in — büyük hasar
+    let closest=null,minD=999;
+    bots.forEach(b=>{if(!b.alive)return;const d=Math.hypot(b.x-player.x,b.y-player.y);if(d<300&&d<minD){minD=d;closest=b;}});
+    if(closest){
+      player.hidden=true;
+      const tx=closest.x,ty=closest.y;
+      setTimeout(()=>{player.x=tx;player.y=ty;player.hidden=false;hitE(closest,80,true);if(!closest.alive)onKill(closest);for(let i=0;i<14;i++)particles.push({x:tx,y:ty,vx:(Math.random()-0.5)*7,vy:(Math.random()-0.5)*7,life:28,col:'#d4b840',r:6});},900);
+    }
+
+  } else if(id==='cheetah'){
+    // Sürat Patlaması: ışık hızı sprint + yolundakilere hasar
+    player.spd*=3.5;
+    for(let i=0;i<10;i++)particles.push({x:player.x,y:player.y,vx:-Math.cos(player.angle)*i*3,vy:-Math.sin(player.angle)*i*3,life:20,col:'#ffff00',r:4});
+    setTimeout(()=>{player.spd=player.char.spd||3.2;bots.forEach(b=>{if(!b.alive)return;if(Math.hypot(b.x-player.x,b.y-player.y)<100){hitE(b,50,true);if(!b.alive)onKill(b);}});},2000);
+  }
 }
 
 function doPick(){
@@ -2005,4 +2166,3 @@ buildCharGrid();
 </script>
 </body>
 </html>
-<!-- Sat Jun 20 22:32:06 +03 2026 -->
